@@ -12,6 +12,14 @@
  *   - 同一时间只允许一个会话存活：登录成功时记录"当前有效 token"，
  *     校验时若 cookie 里的 token 不等于 KV 记录的最新 token，视为已被
  *     新登录挤掉，直接判失效——不需要额外维护会话列表。
+ *
+ * 账号管理（2026-06-30 改版）：
+ *   白名单与口令合并成单个 Secret BW_ACCOUNTS_JSON，格式为
+ *   { "邮箱(全小写)": "该账号专属口令的SHA-256哈希", ... }。
+ *   以后新增一个允许登录的账号，只需要在这一个 JSON 里加一条 key-value，
+ *   不必再像旧版那样同时改两个独立的 Secret（白名单数组 + 共享口令哈希）。
+ *   旧版 BW_WHITELIST_JSON / BW_PASSWORD_HASH 已废弃，可以从 Cloudflare
+ *   Secret 配置里删除。
  */
 
 const SESSION_COOKIE = 'bw_session';
@@ -61,17 +69,22 @@ async function handleLogin(request, env) {
   const password = String((body && body.password) || '');
   if (!email || !password) return jsonResponse({ error: '请输入邮箱和口令' }, 400);
 
-  let whitelist = [];
+  let accounts = {};
   try {
-    whitelist = JSON.parse(env.BW_WHITELIST_JSON || '[]').map((e) => String(e).trim().toLowerCase());
+    accounts = JSON.parse(env.BW_ACCOUNTS_JSON || '{}');
   } catch (e) { /* 配置异常按空白名单处理，全部拒绝 */ }
-  if (whitelist.indexOf(email) === -1) {
+  // key 统一按小写匹配，避免大小写导致"明明加了白名单却登不进去"。
+  var expectedHash = null;
+  Object.keys(accounts).forEach(function (k) {
+    if (k.trim().toLowerCase() === email) expectedHash = accounts[k];
+  });
+  if (!expectedHash) {
     // 不区分"邮箱不在白名单"和"口令错误"，避免给攻击者枚举白名单的信息。
     return jsonResponse({ error: '账号或口令不正确' }, 401);
   }
 
   const hash = await sha256Hex(password);
-  if (!env.BW_PASSWORD_HASH || hash !== env.BW_PASSWORD_HASH) {
+  if (hash !== expectedHash) {
     return jsonResponse({ error: '账号或口令不正确' }, 401);
   }
 
