@@ -21,7 +21,6 @@ export default {
       "clan.war-frame.com":    "https://qcnye09jdqm2.feishu.cn/docx/0C1ddc4kOoVJCOx4520C3r3znEf",
 
       // 攻略/交易/计算器/文档（合并跳转）
-      "www.war-frame.com":  "https://qcnye09jdqm2.feishu.cn/docx/XznXdm7N8oHeHLxMJgQcOXQJnuh",
       "trade.war-frame.com":"https://qcnye09jdqm2.feishu.cn/docx/XznXdm7N8oHeHLxMJgQcOXQJnuh",
       "roc.war-frame.com":  "https://qcnye09jdqm2.feishu.cn/docx/XznXdm7N8oHeHLxMJgQcOXQJnuh",
       "doc.war-frame.com":  "https://qcnye09jdqm2.feishu.cn/docx/XznXdm7N8oHeHLxMJgQcOXQJnuh",
