@@ -14,7 +14,7 @@ exclude = ["src/*", "wrangler.toml", "worker-update-snippet.js", ".claude/*"]
 #   wrangler kv namespace create "BW_SESSIONS"
 [[kv_namespaces]]
 binding = "BW_SESSIONS"
-id = "REPLACE-WITH-REAL-KV-NAMESPACE-ID"
+id = "28cb991746ea48f9bf409acaeb37d902"
 
 # 白名单邮箱+口令哈希、以及 WM clientId 等敏感配置全部走 Secret，
 # 不写入仓库明文。部署前需要执行（替换成你自己的值）：
