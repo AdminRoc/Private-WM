@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="CSC·Alliance：Boss Tool —— Warframe.market 个人订单管理工具">
+  <title>CSC·Alliance：Boss Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <canvas id="star-canvas"></canvas>
+  <div class="nebula-bg"></div>
+
+  <header class="bw-header">
+    <div class="bw-brand">
+      <span class="bw-brand-cn">CSC·Alliance</span>
+      <span class="bw-brand-divider"></span>
+      <span class="bw-brand-sub">BOSS TOOL</span>
+    </div>
+  </header>
+
+  <main class="page-wrap bw-wrap">
+    <section class="bw-profile-card" id="bw-profile-card">
+      <div class="bw-skel-row" style="width:120px;height:120px;border-radius:50%;"></div>
+      <div class="bw-profile-info">
+        <div class="bw-skel-row" style="width:160px;height:22px;margin-bottom:.6rem;"></div>
+        <div class="bw-skel-row" style="width:240px;height:16px;"></div>
+      </div>
+    </section>
+
+    <section class="bw-orders">
+      <div class="bw-orders-col">
+        <h2 class="bw-col-title bw-col-sell">出售挂单 <span class="bw-col-count" id="bw-sell-count"></span></h2>
+        <div id="bw-sell-list" class="bw-order-list">
+          <div class="bw-skel-row"></div><div class="bw-skel-row"></div><div class="bw-skel-row"></div>
+        </div>
+      </div>
+      <div class="bw-orders-col">
+        <h2 class="bw-col-title bw-col-buy">求购挂单 <span class="bw-col-count" id="bw-buy-count"></span></h2>
+        <div id="bw-buy-list" class="bw-order-list">
+          <div class="bw-skel-row"></div><div class="bw-skel-row"></div><div class="bw-skel-row"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

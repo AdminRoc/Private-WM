@@ -1,0 +1,182 @@
+/* ════════════════════════════════════════════════════════════
+   main.css —— CSC·Alliance：Boss Tool 暗金风格基础样式
+   配色语汇延续 wfspeed.run 主站（[[deploy-architecture]]），
+   WM 语义色（买/卖）仅作点缀，不整体换皮成 WM 官网配色。
+   ════════════════════════════════════════════════════════════ */
+
+:root {
+  --c-bg:       #07080f;
+  --c-bg2:      #0d101e;
+  --c-card:     rgba(8, 14, 30, 0.72);
+  --c-text:     #b0cae8;
+  --c-text2:    #607898;
+  --c-white:    #e8f4ff;
+
+  --c-gold-bright: #d4a84a;
+  --c-gold-mid:    rgba(192,148,58,0.88);
+  --c-gold-dim:    rgba(162,118,42,0.45);
+  --c-gold-faint:  rgba(135,98,32,0.18);
+
+  /* WM 语义色：仅用于买卖单分类标识，不作为站点主色 */
+  --c-sell: #cb4a9e;
+  --c-buy:  #209e70;
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+
+  --ease-slow: .65s cubic-bezier(.22,.68,0,1.2);
+  --ease-med:  .35s cubic-bezier(.22,.68,0,1.2);
+
+  --f-sci:  'Orbitron', 'Rajdhani', sans-serif;
+  --f-body: 'Rajdhani', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --f-cn:   'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--f-body);
+  line-height: 1.65;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+
+#star-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; background: var(--c-bg); }
+.nebula-bg {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+}
+.nebula-bg::before {
+  content: ''; position: absolute; width: 90vw; height: 90vw; border-radius: 50%;
+  background: radial-gradient(circle, rgba(145,95,25,.14) 0%, rgba(90,55,12,.06) 40%, transparent 70%);
+  top: -30vw; left: -20vw;
+}
+
+.bw-header {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  height: 84px;
+  border-bottom: 1px solid var(--c-gold-faint);
+  background: rgba(7,8,15,.85);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+/* 头部底部一条缓慢扫光的金线，克制但有"活"的质感，而非堆砌光晕 */
+.bw-header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--c-gold-bright), transparent);
+  opacity: .55;
+  animation: bwHeaderSweep 5.5s ease-in-out infinite;
+}
+@keyframes bwHeaderSweep {
+  0%, 100% { transform: translateX(-65%); opacity: .25; }
+  50%      { transform: translateX(65%);  opacity: .7; }
+}
+.bw-brand {
+  display: flex; align-items: center; gap: .85rem;
+  opacity: 0; transform: translateY(-8px);
+  animation: bwEnterUp .55s var(--ease-slow) .05s forwards;
+}
+.bw-brand-cn {
+  font-family: var(--f-sci); font-weight: 800; letter-spacing: .05em;
+  font-size: 1.55rem; color: var(--c-gold-bright);
+  text-shadow: 0 0 16px rgba(195,152,52,.45);
+}
+.bw-brand-divider {
+  width: 1px; height: 1.5rem;
+  background: linear-gradient(180deg, transparent, var(--c-gold-mid), transparent);
+}
+.bw-brand-sub {
+  font-family: var(--f-sci); font-weight: 700;
+  font-size: 1.05rem; letter-spacing: .14em;
+  color: var(--c-white);
+  text-shadow: 0 0 10px rgba(232,244,255,.25);
+}
+
+.page-wrap { position: relative; z-index: 2; font-size: 17.6px; }
+.bw-wrap { max-width: 980px; margin: 0 auto; padding: 2.4rem 1.4rem 4rem; }
+
+/* ─── 个人资料卡 ─── */
+.bw-profile-card {
+  display: flex; align-items: center; gap: 1.6rem;
+  background: var(--c-card);
+  border: 1px solid var(--c-gold-faint);
+  border-radius: var(--r-lg);
+  padding: 1.6rem 1.8rem;
+  opacity: 0; transform: translateY(14px);
+  animation: bwEnterUp .6s var(--ease-slow) .05s forwards;
+}
+.bw-avatar {
+  width: 120px; height: 120px; border-radius: 50%;
+  border: 2px solid var(--c-gold-mid);
+  box-shadow: 0 0 18px rgba(195,152,52,.3);
+  object-fit: cover; flex-shrink: 0;
+}
+.bw-profile-info { min-width: 0; }
+.bw-ign { font-family: var(--f-sci); font-size: 1.5rem; font-weight: 700; color: var(--c-white); }
+.bw-meta { margin-top: .5rem; color: var(--c-text2); font-size: .95rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+.bw-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: .35rem; }
+.bw-status-dot.online  { background: var(--c-buy); box-shadow: 0 0 6px var(--c-buy); }
+.bw-status-dot.ingame  { background: var(--c-gold-bright); box-shadow: 0 0 6px var(--c-gold-bright); }
+.bw-status-dot.offline { background: #46506a; }
+
+/* ─── 订单分栏 ─── */
+.bw-orders { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin-top: 1.8rem; }
+@media (max-width: 700px) { .bw-orders { grid-template-columns: 1fr; } }
+.bw-orders-col {
+  opacity: 0; transform: translateY(14px);
+  animation: bwEnterUp .6s var(--ease-slow) .15s forwards;
+}
+.bw-orders-col:nth-child(2) { animation-delay: .22s; }
+.bw-col-title { font-family: var(--f-sci); font-size: 1.05rem; margin-bottom: .8rem; display: flex; align-items: center; gap: .5rem; }
+.bw-col-title::before { content: ''; width: 4px; height: 1.1rem; border-radius: 2px; display: inline-block; }
+.bw-col-sell::before { background: var(--c-sell); }
+.bw-col-buy::before  { background: var(--c-buy); }
+.bw-col-count { color: var(--c-text2); font-size: .8rem; font-weight: 400; }
+
+.bw-order-list { display: flex; flex-direction: column; gap: .55rem; }
+.bw-order-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+  background: var(--c-card);
+  border: 1px solid var(--c-gold-faint);
+  border-radius: var(--r-md);
+  padding: .65rem .9rem;
+  opacity: 0; transform: translateX(-8px);
+  animation: bwRowIn .42s var(--ease-slow) forwards;
+  transition: border-color .25s ease, transform .2s ease;
+}
+.bw-order-row:hover { border-color: var(--c-gold-mid); transform: translateX(2px); }
+.bw-order-item { font-weight: 600; color: var(--c-white); }
+.bw-order-price { font-family: var(--f-sci); color: var(--c-gold-bright); font-weight: 700; }
+.bw-order-qty { color: var(--c-text2); font-size: .85rem; }
+
+.bw-empty { color: var(--c-text2); padding: 1rem; text-align: center; font-size: .9rem; }
+
+/* ─── 骨架屏 ─── */
+.bw-skel-row {
+  height: 52px; border-radius: var(--r-md);
+  background: linear-gradient(90deg, rgba(135,98,32,.08) 25%, rgba(135,98,32,.18) 37%, rgba(135,98,32,.08) 63%);
+  background-size: 400% 100%;
+  animation: bwSkelSweep 1.4s ease infinite;
+}
+
+@keyframes bwEnterUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes bwRowIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes bwSkelSweep {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bw-profile-card, .bw-orders-col, .bw-order-row { animation: none !important; opacity: 1 !important; transform: none !important; }
+}
