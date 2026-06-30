@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>登录 — CSC·Alliance：Boss Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    .bw-login-wrap {
+      min-height: calc(100vh - 84px);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 2;
+      padding: 2rem 1.4rem;
+    }
+    .bw-login-card {
+      width: 100%; max-width: 380px;
+      background: var(--c-card);
+      border: 1px solid var(--c-gold-faint);
+      border-radius: var(--r-lg);
+      padding: 2.2rem 1.9rem;
+      opacity: 0; transform: translateY(14px);
+      animation: bwEnterUp .6s var(--ease-slow) .05s forwards;
+    }
+    .bw-login-title {
+      font-family: var(--f-sci); font-size: 1.2rem; color: var(--c-gold-bright);
+      margin-bottom: .3rem; letter-spacing: .03em;
+    }
+    .bw-login-sub { color: var(--c-text2); font-size: .85rem; margin-bottom: 1.6rem; }
+    .bw-field { margin-bottom: 1.1rem; }
+    .bw-field label { display: block; font-size: .82rem; color: var(--c-text2); margin-bottom: .4rem; }
+    .bw-field input {
+      width: 100%; padding: .65rem .85rem;
+      background: rgba(0,0,0,.35);
+      border: 1px solid var(--c-gold-faint);
+      border-radius: var(--r-sm);
+      color: var(--c-white); font-family: var(--f-body); font-size: .95rem;
+      transition: border-color .25s ease, box-shadow .25s ease;
+    }
+    .bw-field input:focus {
+      outline: none; border-color: var(--c-gold-mid);
+      box-shadow: 0 0 0 3px rgba(212,168,74,.12);
+    }
+    .bw-login-btn {
+      width: 100%; padding: .75rem;
+      background: linear-gradient(135deg, rgba(192,148,58,.22), rgba(135,98,32,.12));
+      border: 1px solid var(--c-gold-mid);
+      border-radius: var(--r-sm);
+      color: var(--c-gold-bright); font-family: var(--f-sci); font-weight: 700;
+      font-size: .95rem; letter-spacing: .05em; cursor: pointer;
+      transition: background .25s ease, transform .15s ease, box-shadow .25s ease;
+    }
+    .bw-login-btn:hover { box-shadow: 0 0 18px rgba(195,152,52,.25); }
+    .bw-login-btn:active { transform: scale(.98); }
+    .bw-login-btn[disabled] { opacity: .55; cursor: default; }
+    .bw-login-err {
+      margin-top: 1rem; padding: .6rem .8rem;
+      border-radius: var(--r-sm);
+      background: rgba(203,74,158,.1); border: 1px solid rgba(203,74,158,.35);
+      color: #e8a4cf; font-size: .85rem;
+      display: none;
+    }
+    .bw-login-err.show { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="star-canvas"></canvas>
+  <div class="nebula-bg"></div>
+
+  <header class="bw-header">
+    <div class="bw-brand">
+      <span class="bw-brand-cn">CSC·Alliance</span>
+      <span class="bw-brand-divider"></span>
+      <span class="bw-brand-sub">BOSS TOOL</span>
+    </div>
+  </header>
+
+  <main class="bw-login-wrap">
+    <form class="bw-login-card" id="bw-login-form" autocomplete="on">
+      <div class="bw-login-title">站内登录</div>
+      <div class="bw-login-sub">仅限白名单账号，与 Warframe.market 账号无关</div>
+      <div class="bw-field">
+        <label for="bw-email">邮箱</label>
+        <input type="email" id="bw-email" name="email" required autocomplete="username">
+      </div>
+      <div class="bw-field">
+        <label for="bw-pass">口令</label>
+        <input type="password" id="bw-pass" name="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="bw-login-btn" id="bw-login-btn">登录</button>
+      <div class="bw-login-err" id="bw-login-err"></div>
+    </form>
+  </main>
+
+  <script src="js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+name = "privatewm"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+
+# 静态资源（index.html/css/js/picture）直接由 Workers Static Assets 托管，
+# /api/* 之外的请求自动 fallback 到这里，无需额外配置路由。
+[assets]
+directory = "."
+binding = "ASSETS"
+exclude = ["src/*", "wrangler.toml", "worker-update-snippet.js", ".claude/*"]
+
+# 登录会话存储（白名单校验 + 单会话挤占）。
+# KV 命名空间需要在 Cloudflare 控制台/wrangler 创建后把 id 填进来：
+#   wrangler kv namespace create "BW_SESSIONS"
+[[kv_namespaces]]
+binding = "BW_SESSIONS"
+id = "REPLACE-WITH-REAL-KV-NAMESPACE-ID"
+
+# 白名单邮箱+口令哈希、以及 WM clientId 等敏感配置全部走 Secret，
+# 不写入仓库明文。部署前需要执行（替换成你自己的值）：
+#   wrangler secret put BW_WHITELIST_JSON
+#     —— JSON 数组，例如 ["Chinaxiangkun@gmail.com"]
+#   wrangler secret put BW_PASSWORD_HASH
+#     —— 口令的 SHA-256 十六进制摘要（不存明文口令）
