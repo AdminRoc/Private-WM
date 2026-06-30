@@ -16,7 +16,7 @@
     });
   }
 
-  function fetchProxy(path) {
+  function fetchProxyOnce(path) {
     var url = WM_PROXY_BASE.replace(/\/$/, '') + path;
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, 15000);
@@ -27,6 +27,20 @@
     }).then(function (j) {
       if (j && j.error) throw new Error(JSON.stringify(j.error));
       return j && j.data;
+    });
+  }
+
+  /* 代理偶发因上游/边缘超时返回 502，实测同一接口单独重试基本必成功，
+     这里做最多 2 次退避重试（500ms/1200ms），减少用户能感知到的失败率，
+     而不是去动代理本身的超时阈值（避免过度调参治标不治本）。 */
+  function fetchProxy(path, _attempt) {
+    var attempt = _attempt || 0;
+    return fetchProxyOnce(path).catch(function (err) {
+      if (attempt >= 2) throw err;
+      var delay = attempt === 0 ? 500 : 1200;
+      return new Promise(function (resolve) {
+        setTimeout(resolve, delay);
+      }).then(function () { return fetchProxy(path, attempt + 1); });
     });
   }
 
