@@ -157,6 +157,57 @@ img { display: block; max-width: 100%; }
 
 .bw-empty { color: var(--c-text2); padding: 1rem; text-align: center; font-size: .9rem; }
 
+/* ─── 登出按钮 ─── */
+.bw-logout-btn {
+  position: absolute; right: 1.4rem;
+  background: transparent;
+  border: 1px solid var(--c-gold-faint);
+  border-radius: var(--r-sm);
+  color: var(--c-text2); font-family: var(--f-sci); font-size: .78rem;
+  letter-spacing: .06em; padding: .35rem .8rem; cursor: pointer;
+  transition: border-color .2s ease, color .2s ease;
+}
+.bw-logout-btn:hover { border-color: var(--c-gold-mid); color: var(--c-gold-bright); }
+
+/* ─── 订单管理控件 ─── */
+.bw-order-row { position: relative; }
+.bw-order-price-wrap { display: flex; align-items: center; }
+.bw-order-actions {
+  display: flex; gap: .35rem; align-items: center;
+  opacity: 0; transition: opacity .18s ease;
+  margin-left: auto; flex-shrink: 0;
+}
+.bw-order-row:hover .bw-order-actions { opacity: 1; }
+.bw-act-btn {
+  background: transparent;
+  border: 1px solid var(--c-gold-faint);
+  border-radius: var(--r-sm);
+  color: var(--c-text2); font-size: .78rem;
+  padding: .18rem .45rem; cursor: pointer; line-height: 1;
+  transition: border-color .18s ease, color .18s ease, background .18s ease;
+}
+.bw-act-btn:hover { border-color: var(--c-gold-mid); color: var(--c-white); }
+.bw-act-vis.is-hidden { color: var(--c-text2); opacity: .5; }
+.bw-act-vis.is-hidden:hover { opacity: 1; color: var(--c-buy); border-color: var(--c-buy); }
+.bw-act-del:hover { border-color: var(--c-sell); color: var(--c-sell); }
+.bw-act-btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+
+/* ─── 隐藏挂单状态 ─── */
+.bw-order-hidden { opacity: .55; }
+.bw-order-hidden:hover { opacity: .85; }
+.bw-hidden-badge {
+  font-size: .7rem; padding: .12rem .4rem;
+  border: 1px solid rgba(203,74,158,.35);
+  border-radius: var(--r-sm);
+  color: rgba(203,74,158,.65);
+  flex-shrink: 0;
+}
+
+/* ─── 操作中加载态 ─── */
+.bw-row-loading { pointer-events: none; }
+.bw-row-loading .bw-order-item,
+.bw-row-loading .bw-order-price { opacity: .4; }
+
 /* ─── 骨架屏 ─── */
 .bw-skel-row {
   height: 52px; border-radius: var(--r-md);

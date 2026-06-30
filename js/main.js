@@ -1,12 +1,13 @@
 /* ════════════════════════════════════════════════════════════
-   main.js —— Phase 1：个人档案页视觉还原（只读，公开端点，零凭据）
-   全部请求经 wm.wfspeed.run 边缘代理转发，前端不直连 api.warframe.market。
-   代理已是通用 /v2/* GET 透传（见 Ws-Web-core/cloudflare-worker-wm/
-   edgeone-function.js），公开端点无需任何改动即可直接使用。
+   main.js —— Phase 2：认证门控 + 私有订单管理
+   - 启动时先检查 /api/auth/me，未登录跳转 login.html
+   - 公开资料（头像/IGN/声望）仍走 wm.wfspeed.run 公开代理
+   - 订单数据改走 /api/wm/orders（后端代理，含隐藏单）
+   - 支持：可见性切换 / 改价 / 删除
    ════════════════════════════════════════════════════════════ */
 (function () {
   var WM_PROXY_BASE = 'https://wm.wfspeed.run';
-  var PROFILE_SLUG = 'csc-2026';
+  var PROFILE_SLUG  = 'csc-2026';
 
   var STATUS_LABEL = { online: '在线', ingame: '游戏中', offline: '离线', invisible: '隐身' };
 
@@ -16,60 +17,50 @@
     });
   }
 
+  /* ── 公开资料代理（wm.wfspeed.run，带重试） ── */
   function fetchProxyOnce(path) {
-    var url = WM_PROXY_BASE.replace(/\/$/, '') + path;
+    var url  = WM_PROXY_BASE + path;
     var ctrl = new AbortController();
-    var timer = setTimeout(function () { ctrl.abort(); }, 15000);
-    return fetch(url, { signal: ctrl.signal }).then(function (r) {
-      clearTimeout(timer);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function (j) {
-      if (j && j.error) throw new Error(JSON.stringify(j.error));
-      return j && j.data;
-    });
+    var t    = setTimeout(function () { ctrl.abort(); }, 15000);
+    return fetch(url, { signal: ctrl.signal })
+      .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) { if (j && j.error) throw new Error(JSON.stringify(j.error)); return j && j.data; });
   }
-
-  /* 代理偶发因上游/边缘超时返回 502，实测同一接口单独重试基本必成功，
-     这里做最多 2 次退避重试（500ms/1200ms），减少用户能感知到的失败率，
-     而不是去动代理本身的超时阈值（避免过度调参治标不治本）。 */
-  function fetchProxy(path, _attempt) {
-    var attempt = _attempt || 0;
+  function fetchProxy(path, attempt) {
+    attempt = attempt || 0;
     return fetchProxyOnce(path).catch(function (err) {
       if (attempt >= 2) throw err;
-      var delay = attempt === 0 ? 500 : 1200;
-      return new Promise(function (resolve) {
-        setTimeout(resolve, delay);
-      }).then(function () { return fetchProxy(path, attempt + 1); });
+      return new Promise(function (res) { setTimeout(res, attempt === 0 ? 500 : 1200); })
+        .then(function () { return fetchProxy(path, attempt + 1); });
     });
   }
 
-  /* 自定义头像兜底：用户可指定自己的 logo 图，按主页路径存放在仓库里
-     picture/avatar-{slug}.png，优先级高于 WM 自带头像（WM 头像经常裂图/
-     读取失败，自定义图稳定、自托管、零外部依赖）。文件不存在时 onerror
-     自动回退到 WM 头像，WM 头像也失败则隐藏图片。 */
+  /* ── 我方后端 API ── */
+  function apiFetch(path, opts) {
+    return fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  }
+
+  /* ── 头像兜底链 ── */
   function avatarChain(user) {
     var custom = 'picture/avatar-' + encodeURIComponent(PROFILE_SLUG) + '.png';
-    var wm = user.avatar
-      ? WM_PROXY_BASE.replace(/\/$/, '') + '/static/' + user.avatar
-      : null;
+    var wm     = user.avatar ? WM_PROXY_BASE + '/static/' + user.avatar : null;
     return [custom, wm].filter(Boolean);
   }
 
+  /* ══════════════════════════════════════════════
+     渲染：资料卡
+  ══════════════════════════════════════════════ */
   function renderProfile(user) {
     var card = document.getElementById('bw-profile-card');
-    if (!user) {
-      card.innerHTML = '<div class="bw-empty">未能获取该账号资料，请稍后重试。</div>';
-      return;
-    }
-    var chain = avatarChain(user);
-    var avatarUrl = chain.shift() || 'https://warframe.market/static/assets/user/default-avatar.png';
-    var fallbackAttr = chain.length
-      ? ' onerror="this.onerror=null;this.src=\'' + esc(chain[0]) + '\';this.dataset.bwFallback=1;"'
-      : ' onerror="this.style.visibility=\'hidden\'"';
-    var status = STATUS_LABEL[user.status] || user.status || '';
+    if (!user) { card.innerHTML = '<div class="bw-empty">未能获取账号资料。</div>'; return; }
+    var chain    = avatarChain(user);
+    var src      = chain.shift() || '';
+    var fbAttr   = chain.length
+      ? ' onerror="this.onerror=null;this.src=\'' + esc(chain[0]) + '\';"'
+      : ' onerror="this.style.visibility=\'hidden\';"';
+    var status   = STATUS_LABEL[user.status] || user.status || '';
     card.innerHTML =
-      '<img class="bw-avatar" src="' + esc(avatarUrl) + '" alt="" ' + fallbackAttr + '>' +
+      '<img class="bw-avatar" src="' + esc(src) + '" alt=""' + fbAttr + '>' +
       '<div class="bw-profile-info">' +
         '<div class="bw-ign">' + esc(user.ingameName || PROFILE_SLUG) + '</div>' +
         '<div class="bw-meta">' +
@@ -80,81 +71,226 @@
       '</div>';
   }
 
+  /* ══════════════════════════════════════════════
+     渲染：订单列表（含管理控件）
+  ══════════════════════════════════════════════ */
+  var _ordersCache = [];   // 当前全量订单，供操作后局部刷新用
+
   function orderRow(o) {
-    var item = (o.item && (o.item.en || o.item.zh)) || o.itemId || '';
-    var qty = o.quantity ? ('×' + o.quantity) : '';
-    return '<div class="bw-order-row">' +
+    var item    = (o.item && (o.item.en || o.item.zh || o.item.en_name || o.item.slug)) || o.itemId || '—';
+    var qty     = o.quantity ? '×' + o.quantity : '';
+    var hidden  = o.visible === false;
+    var visIcon = hidden ? '👁' : '👁';
+    var visTip  = hidden ? '当前隐藏，点击显示' : '当前显示，点击隐藏';
+
+    return '<div class="bw-order-row' + (hidden ? ' bw-order-hidden' : '') + '" data-id="' + esc(o.id) + '">' +
       '<span class="bw-order-item">' + esc(item) + '</span>' +
       '<span class="bw-order-qty">' + esc(qty) + '</span>' +
-      '<span class="bw-order-price">' + esc(o.platinum) + 'p</span>' +
-      '</div>';
+      '<span class="bw-order-price-wrap">' +
+        '<span class="bw-order-price" data-price="' + esc(o.platinum) + '">' + esc(o.platinum) + 'p</span>' +
+      '</span>' +
+      (hidden ? '<span class="bw-hidden-badge">隐藏</span>' : '') +
+      '<div class="bw-order-actions">' +
+        '<button class="bw-act-btn bw-act-vis' + (hidden ? ' is-hidden' : '') + '" data-id="' + esc(o.id) + '" data-visible="' + (!hidden) + '" title="' + visTip + '">' + visIcon + '</button>' +
+        '<button class="bw-act-btn bw-act-edit" data-id="' + esc(o.id) + '" data-price="' + esc(o.platinum) + '" title="修改价格">✏</button>' +
+        '<button class="bw-act-btn bw-act-del" data-id="' + esc(o.id) + '" title="删除">✕</button>' +
+      '</div>' +
+    '</div>';
   }
 
   function renderOrders(orders) {
+    _ordersCache = orders || [];
     var sellEl = document.getElementById('bw-sell-list');
-    var buyEl = document.getElementById('bw-buy-list');
-    var sellCountEl = document.getElementById('bw-sell-count');
-    var buyCountEl = document.getElementById('bw-buy-count');
-    if (!orders) orders = [];
-    var sell = orders.filter(function (o) { return o.type === 'sell' && o.visible !== false; });
-    var buy = orders.filter(function (o) { return o.type === 'buy' && o.visible !== false; });
+    var buyEl  = document.getElementById('bw-buy-list');
+    var scEl   = document.getElementById('bw-sell-count');
+    var bcEl   = document.getElementById('bw-buy-count');
 
-    sellCountEl.textContent = sell.length ? ('(' + sell.length + ')') : '';
-    buyCountEl.textContent = buy.length ? ('(' + buy.length + ')') : '';
+    var sell = _ordersCache.filter(function (o) { return o.type === 'sell'; });
+    var buy  = _ordersCache.filter(function (o) { return o.type === 'buy'; });
 
-    sellEl.innerHTML = sell.length
-      ? sell.map(orderRow).join('')
-      : '<div class="bw-empty">暂无出售挂单</div>';
-    buyEl.innerHTML = buy.length
-      ? buy.map(orderRow).join('')
-      : '<div class="bw-empty">暂无求购挂单</div>';
+    // 可见单在前，隐藏单在后
+    function sortOrders(arr) {
+      return arr.slice().sort(function (a, b) {
+        if (a.visible === false && b.visible !== false) return 1;
+        if (a.visible !== false && b.visible === false) return -1;
+        return 0;
+      });
+    }
 
-    // 逐行错开入场，复用 bwRowIn 动画。
+    var sortedSell = sortOrders(sell);
+    var sortedBuy  = sortOrders(buy);
+
+    var visibleSell = sell.filter(function (o) { return o.visible !== false; }).length;
+    var visibleBuy  = buy.filter(function (o) { return o.visible !== false; }).length;
+
+    scEl.textContent = sell.length ? ('(' + visibleSell + '/' + sell.length + ')') : '';
+    bcEl.textContent = buy.length  ? ('(' + visibleBuy  + '/' + buy.length  + ')') : '';
+
+    sellEl.innerHTML = sortedSell.length ? sortedSell.map(orderRow).join('') : '<div class="bw-empty">暂无出售挂单</div>';
+    buyEl.innerHTML  = sortedBuy.length  ? sortedBuy.map(orderRow).join('')  : '<div class="bw-empty">暂无求购挂单</div>';
+
     [].slice.call(document.querySelectorAll('.bw-order-row')).forEach(function (el, i) {
-      el.style.animationDelay = (i * 0.045) + 's';
+      el.style.animationDelay = (i * 0.04) + 's';
+    });
+
+    bindOrderActions();
+  }
+
+  function showOrdersError(msg) {
+    var html = '<div class="bw-empty">' + esc(msg || '挂单数据获取失败，请稍后重试。') + '</div>';
+    document.getElementById('bw-sell-list').innerHTML = html;
+    document.getElementById('bw-buy-list').innerHTML  = html;
+  }
+
+  /* ══════════════════════════════════════════════
+     订单操作：可见性 / 改价 / 删除
+  ══════════════════════════════════════════════ */
+  function setRowLoading(id, loading) {
+    var row = document.querySelector('.bw-order-row[data-id="' + id + '"]');
+    if (!row) return;
+    row.classList.toggle('bw-row-loading', loading);
+    [].slice.call(row.querySelectorAll('.bw-act-btn')).forEach(function (b) { b.disabled = loading; });
+  }
+
+  function patchOrder(id, payload) {
+    setRowLoading(id, true);
+    return apiFetch('/api/wm/orders/' + id, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error((j && j.error) || ('HTTP ' + r.status)); });
+      return r.json();
+    }).then(function (j) {
+      // 用服务器返回值更新本地缓存
+      var updated = j && (j.data || j.payload && j.payload.order);
+      if (updated) {
+        _ordersCache = _ordersCache.map(function (o) { return o.id === id ? Object.assign({}, o, updated) : o; });
+      } else {
+        _ordersCache = _ordersCache.map(function (o) { return o.id === id ? Object.assign({}, o, payload) : o; });
+      }
+      renderOrders(_ordersCache);
+    }).catch(function (err) {
+      setRowLoading(id, false);
+      alert('操作失败：' + err.message);
     });
   }
 
-  function showOrdersError() {
-    var msg = '<div class="bw-empty">挂单数据获取失败，请稍后重试。</div>';
-    document.getElementById('bw-sell-list').innerHTML = msg;
-    document.getElementById('bw-buy-list').innerHTML = msg;
+  function deleteOrder(id) {
+    if (!confirm('确认删除该挂单？')) return;
+    setRowLoading(id, true);
+    apiFetch('/api/wm/orders/' + id, { method: 'DELETE' })
+      .then(function (r) {
+        if (r.status === 204 || r.ok) {
+          _ordersCache = _ordersCache.filter(function (o) { return o.id !== id; });
+          renderOrders(_ordersCache);
+        } else {
+          return r.json().then(function (j) { throw new Error((j && j.error) || ('HTTP ' + r.status)); });
+        }
+      }).catch(function (err) {
+        setRowLoading(id, false);
+        alert('删除失败：' + err.message);
+      });
   }
 
-  function showProfileError() {
-    document.getElementById('bw-profile-card').innerHTML =
-      '<div class="bw-empty">资料获取失败，请稍后重试。</div>';
+  function editPrice(id, currentPrice) {
+    var input = prompt('输入新价格（铂金）：', currentPrice);
+    if (input === null) return;
+    var price = parseInt(input, 10);
+    if (!price || price < 1) { alert('价格无效。'); return; }
+    patchOrder(id, { platinum: price });
   }
 
-  fetchProxy('/v2/user/' + encodeURIComponent(PROFILE_SLUG))
-    .then(renderProfile)
-    .catch(showProfileError);
+  function bindOrderActions() {
+    // 可见性切换
+    [].slice.call(document.querySelectorAll('.bw-act-vis')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id      = btn.dataset.id;
+        var visible = btn.dataset.visible === 'true';
+        patchOrder(id, { visible: visible });
+      });
+    });
+    // 改价
+    [].slice.call(document.querySelectorAll('.bw-act-edit')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        editPrice(btn.dataset.id, btn.dataset.price);
+      });
+    });
+    // 删除
+    [].slice.call(document.querySelectorAll('.bw-act-del')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        deleteOrder(btn.dataset.id);
+      });
+    });
+  }
 
-  fetchProxy('/v2/orders/user/' + encodeURIComponent(PROFILE_SLUG))
-    .then(renderOrders)
-    .catch(showOrdersError);
+  /* ══════════════════════════════════════════════
+     登出按钮
+  ══════════════════════════════════════════════ */
+  function bindLogout() {
+    var btn = document.getElementById('bw-logout-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      apiFetch('/api/auth/logout', { method: 'POST' }).then(function () {
+        location.href = 'login.html';
+      });
+    });
+  }
 
-  // ─── 星空背景（与主站一致的轻量装饰，非必需功能，失败不影响主体内容） ───
+  /* ══════════════════════════════════════════════
+     启动：鉴权检查 → 加载数据
+  ══════════════════════════════════════════════ */
+  apiFetch('/api/auth/me')
+    .then(function (r) { return r.json(); })
+    .then(function (me) {
+      if (!me.authenticated) {
+        location.replace('login.html');
+        return;
+      }
+
+      bindLogout();
+
+      // 公开资料走代理（头像/IGN/声望）
+      fetchProxy('/v2/user/' + encodeURIComponent(PROFILE_SLUG))
+        .then(renderProfile)
+        .catch(function () {
+          document.getElementById('bw-profile-card').innerHTML = '<div class="bw-empty">资料获取失败。</div>';
+        });
+
+      // 私有订单走我方后端（含隐藏单）
+      apiFetch('/api/wm/orders')
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (j) {
+          // WM v2 返回格式：{ data: [...] }
+          var orders = (j && j.data) || [];
+          renderOrders(orders);
+        })
+        .catch(function (err) {
+          showOrdersError('挂单数据获取失败：' + err.message);
+        });
+    })
+    .catch(function () {
+      location.replace('login.html');
+    });
+
+  /* ── 星空背景 ── */
   (function initStars() {
     var c = document.getElementById('star-canvas');
     if (!c || !c.getContext) return;
-    var ctx = c.getContext('2d');
-    var stars = [];
+    var ctx = c.getContext('2d'), stars = [];
     function resize() {
-      c.width = window.innerWidth; c.height = window.innerHeight;
-      stars = [];
-      var n = Math.floor((c.width * c.height) / 9000);
-      for (var i = 0; i < n; i++) {
+      c.width = window.innerWidth; c.height = window.innerHeight; stars = [];
+      var n = Math.floor(c.width * c.height / 9000);
+      for (var i = 0; i < n; i++)
         stars.push({ x: Math.random() * c.width, y: Math.random() * c.height, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.6 + 0.2 });
-      }
     }
     function draw() {
       ctx.clearRect(0, 0, c.width, c.height);
       ctx.fillStyle = '#fff';
-      stars.forEach(function (s) {
-        ctx.globalAlpha = s.a;
-        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
-      });
+      stars.forEach(function (s) { ctx.globalAlpha = s.a; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
       ctx.globalAlpha = 1;
     }
     window.addEventListener('resize', function () { resize(); draw(); });
