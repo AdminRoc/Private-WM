@@ -15,9 +15,12 @@ const SESSION_TTL     = 60 * 60 * 12;   // 12h，与 WM JWT 同步
 const WM_API          = 'https://api.warframe.market';
 const WM_DEVICE_ID    = '987d81b2-8a2c-425b-ae0e-cfba824548da';
 const WM_JWT_TTL      = 60 * 60 * 12;
-const WM_ITEMS_KV_KEY = 'wm_items_cache';
-const WM_ITEMS_TTL    = 60 * 60;
-const WM_PRICE_TTL    = 60 * 5;
+const WM_ITEMS_KV_KEY    = 'wm_items_cache';
+const WM_ITEMS_TTL       = 60 * 60;
+const WM_PRICE_TTL       = 60 * 5;
+const PRICE_BATCH_SIZE   = 600;          // 每次 Cron 处理的物品数，约 5 分钟
+const PRICE_OFFSET_KEY   = 'price_compute_offset';
+const PRICE_KV_TTL       = 60 * 60 * 25; // 25h：覆盖至少一个完整轮次
 
 /* ══ 通用工具 ═══════════════════════════════════════════════ */
 function jsonResponse(obj, status) {
@@ -540,23 +543,36 @@ async function handleAvatarProxy(request, env) {
   return env.ASSETS.fetch(new Request(new URL('/picture/csc-logo.png', request.url)));
 }
 
-/* ══ 定时任务：预计算全量物品均价 ══════════════════════════════
-   每天凌晨3点/9点/15点/21点（UTC）触发，逐个 GET orders 并写 KV。
-   TTL = 7h（覆盖到下次计算），避免前端等待。
+/* ══ 定时任务：分批预计算全量 WM 物品均价 ══════════════════════
+   每小时 Cron 触发一次，每次处理 PRICE_BATCH_SIZE 个物品。
+   进度偏移量存 KV（PRICE_OFFSET_KEY），下次从断点继续。
+   WM 全量约 2500 个物品，每批 600 个 ≈ 5 分钟，
+   约 4 小时完成一轮，远低于 Cloudflare 30 分钟上限。
 ═══════════════════════════════════════════════════════════════ */
-async function computeAllPrices(env) {
+async function computePricesBatch(env) {
+  // 读全量物品列表（由 refreshItemsCache 每小时维护）
   const itemsRaw = await env.BW_SESSIONS.get(WM_ITEMS_KV_KEY);
   if (!itemsRaw) return;
   let items;
   try { items = JSON.parse(itemsRaw); } catch { return; }
 
   const slugs = items.map(function(i) { return i.url_name || i.slug; }).filter(Boolean);
+  const total = slugs.length;
+  if (total === 0) return;
 
-  for (var i = 0; i < slugs.length; i++) {
-    const slug = slugs[i];
+  // 读进度偏移量
+  let offset = 0;
+  const offsetRaw = await env.BW_SESSIONS.get(PRICE_OFFSET_KEY);
+  if (offsetRaw) { offset = parseInt(offsetRaw, 10) || 0; }
+  if (offset >= total) offset = 0;  // 上一轮已跑完，从头开始
+
+  const batch = slugs.slice(offset, offset + PRICE_BATCH_SIZE);
+
+  for (var i = 0; i < batch.length; i++) {
+    const slug = batch[i];
     try {
       const resp = await wmPublicFetch('/v1/items/' + slug + '/orders', env);
-      if (!resp.ok) { await new Promise(function(r) { setTimeout(r, 600); }); continue; }
+      if (!resp.ok) { await new Promise(function(r) { setTimeout(r, 800); }); continue; }
       const json = await resp.json();
       const allOrders = (json.payload && json.payload.orders) || json.data || [];
 
@@ -572,10 +588,10 @@ async function computeAllPrices(env) {
 
       const count = prices.length;
       let avg = null, special = false, lo = 0, hi = 0, used = 0;
-      if (count >= 20)      { lo = 3; hi = 5; }
-      else if (count >= 5)  { lo = 2; hi = 2; }
-      else if (count >= 3)  { lo = 1; hi = 1; }
-      else                  { special = true; }
+      if (count >= 20)     { lo = 3; hi = 5; }
+      else if (count >= 5) { lo = 2; hi = 2; }
+      else if (count >= 3) { lo = 1; hi = 1; }
+      else                 { special = true; }
 
       if (!special) {
         const trimmed = prices.slice(lo, count - hi);
@@ -584,11 +600,15 @@ async function computeAllPrices(env) {
       }
 
       const result = { avg, count, used, total: allOrders.length, special: special || undefined };
-      await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: 60 * 60 * 7 });
+      await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: PRICE_KV_TTL });
     } catch {}
-    // 限速：每条随机 400-700ms，模拟正常浏览行为，约 1500 条 12 分钟内完成
+    // 随机 400-700ms 间隔，约 1.7 req/s，低于 WM 限速
     await new Promise(function(r) { setTimeout(r, 400 + Math.random() * 300); });
   }
+
+  // 保存新偏移量（本批结束位置）
+  const newOffset = (offset + batch.length >= total) ? 0 : offset + batch.length;
+  await env.BW_SESSIONS.put(PRICE_OFFSET_KEY, String(newOffset), { expirationTtl: 60 * 60 * 48 });
 }
 
 export default {
@@ -632,12 +652,9 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每小时：刷新物品总表
+    // 每小时：刷新物品总表（须先于均价批次，确保 slug 列表是最新的）
     ctx.waitUntil(refreshItemsCache(env));
-    // 每天 3/9/15/21 点 UTC：预计算全量均价
-    const h = new Date(event.scheduledTime).getUTCHours();
-    if (h === 3 || h === 9 || h === 15 || h === 21) {
-      ctx.waitUntil(computeAllPrices(env));
-    }
+    // 每小时：处理下一批均价（基于 KV offset 断点续跑，约 4 小时一轮）
+    ctx.waitUntil(computePricesBatch(env));
   },
 };
