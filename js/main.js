@@ -162,8 +162,7 @@
       if (!r.ok) return r.json().then(function (j) { throw new Error((j && j.error) || ('HTTP ' + r.status)); });
       return r.json();
     }).then(function (j) {
-      // 用服务器返回值更新本地缓存
-      var updated = j && (j.data || j.payload && j.payload.order);
+      var updated = j && (j.data || (j.payload && j.payload.order));
       if (updated) {
         _ordersCache = _ordersCache.map(function (o) { return o.id === id ? Object.assign({}, o, updated) : o; });
       } else {
@@ -172,54 +171,178 @@
       renderOrders(_ordersCache);
     }).catch(function (err) {
       setRowLoading(id, false);
-      alert('操作失败：' + err.message);
+      throw err;
     });
   }
 
-  function deleteOrder(id) {
-    if (!confirm('确认删除该挂单？')) return;
-    setRowLoading(id, true);
+  /* ══════════════════════════════════════════════
+     编辑抽屉
+  ══════════════════════════════════════════════ */
+  var _drawerOrderId = null;
+
+  var _drawerEl   = document.getElementById('bw-edit-drawer');
+  var _overlayEl  = document.getElementById('bw-drawer-overlay');
+  var _drawerName = document.getElementById('bw-drawer-item-name');
+  var _drawerBadge = document.getElementById('bw-drawer-type-badge');
+  var _pillVisible = document.getElementById('bw-pill-visible');
+  var _pillHidden  = document.getElementById('bw-pill-hidden');
+  var _drawerPrice = document.getElementById('bw-drawer-price');
+  var _drawerQty   = document.getElementById('bw-drawer-qty');
+  var _btnUpdate   = document.getElementById('bw-drawer-update');
+  var _btnDelete   = document.getElementById('bw-drawer-delete');
+  var _confirmDel  = document.getElementById('bw-drawer-confirm-del');
+  var _btnConfNo   = document.getElementById('bw-drawer-confirm-no');
+  var _btnConfYes  = document.getElementById('bw-drawer-confirm-yes');
+  var _drawerMsg   = document.getElementById('bw-drawer-msg');
+  var _btnClose    = document.getElementById('bw-drawer-close');
+
+  function drawerMsg(text, type) {
+    _drawerMsg.textContent = text || '';
+    _drawerMsg.className   = 'bw-drawer-msg' + (type ? ' ' + type : '');
+  }
+
+  function drawerSetLoading(loading) {
+    _btnUpdate.disabled = loading;
+    _btnDelete.disabled = loading;
+    _drawerPrice.disabled = loading;
+    _drawerQty.disabled   = loading;
+    _pillVisible.disabled = loading;
+    _pillHidden.disabled  = loading;
+  }
+
+  function openDrawer(order) {
+    _drawerOrderId = order.id;
+    drawerMsg('');
+    _confirmDel.classList.remove('is-open');
+
+    var item = (order.item && (order.item.zh || order.item.en || order.item.slug)) || order.itemId || '—';
+    _drawerName.textContent = item;
+
+    _drawerBadge.textContent = order.type === 'sell' ? '出售' : '求购';
+    _drawerBadge.className = 'bw-drawer-type-badge ' + (order.type === 'sell' ? 'is-sell' : 'is-buy');
+
+    var isVisible = order.visible !== false;
+    _pillVisible.classList.toggle('active', isVisible);
+    _pillHidden.classList.toggle('active', !isVisible);
+
+    _drawerPrice.value = order.platinum || '';
+    _drawerQty.value   = order.quantity || '';
+
+    drawerSetLoading(false);
+    _drawerEl.classList.add('is-open');
+    _overlayEl.classList.add('is-open');
+    _drawerPrice.focus();
+  }
+
+  function closeDrawer() {
+    _drawerEl.classList.remove('is-open');
+    _overlayEl.classList.remove('is-open');
+    _confirmDel.classList.remove('is-open');
+    _drawerOrderId = null;
+  }
+
+  _btnClose.addEventListener('click', closeDrawer);
+  _overlayEl.addEventListener('click', closeDrawer);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && _drawerOrderId) closeDrawer();
+  });
+
+  // 可见性 pill
+  [_pillVisible, _pillHidden].forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      _pillVisible.classList.toggle('active', pill === _pillVisible);
+      _pillHidden.classList.toggle('active',  pill === _pillHidden);
+    });
+  });
+
+  // 更新按钮
+  _btnUpdate.addEventListener('click', function () {
+    var id = _drawerOrderId;
+    if (!id) return;
+    var price = parseInt(_drawerPrice.value, 10);
+    var qty   = parseInt(_drawerQty.value,   10);
+    if (!price || price < 1)  { drawerMsg('请输入有效的价格（≥1）', 'err'); return; }
+    if (!qty   || qty < 1)    { drawerMsg('请输入有效的数量（≥1）', 'err'); return; }
+
+    var visible = _pillVisible.classList.contains('active');
+    drawerSetLoading(true);
+    drawerMsg('更新中…');
+
+    patchOrder(id, { platinum: price, quantity: qty, visible: visible })
+      .then(function () {
+        drawerMsg('更新成功！', 'ok');
+        setTimeout(closeDrawer, 700);
+      })
+      .catch(function (err) {
+        drawerSetLoading(false);
+        drawerMsg('更新失败：' + err.message, 'err');
+      });
+  });
+
+  // 删除按钮（展开确认区）
+  _btnDelete.addEventListener('click', function () {
+    _confirmDel.classList.add('is-open');
+    _btnDelete.style.display = 'none';
+  });
+  _btnConfNo.addEventListener('click', function () {
+    _confirmDel.classList.remove('is-open');
+    _btnDelete.style.display = '';
+  });
+  _btnConfYes.addEventListener('click', function () {
+    var id = _drawerOrderId;
+    if (!id) return;
+    drawerSetLoading(true);
+    drawerMsg('删除中…');
     apiFetch('/api/wm/orders/' + id, { method: 'DELETE' })
       .then(function (r) {
         if (r.status === 204 || r.ok) {
           _ordersCache = _ordersCache.filter(function (o) { return o.id !== id; });
           renderOrders(_ordersCache);
+          closeDrawer();
         } else {
           return r.json().then(function (j) { throw new Error((j && j.error) || ('HTTP ' + r.status)); });
         }
       }).catch(function (err) {
-        setRowLoading(id, false);
-        alert('删除失败：' + err.message);
+        drawerSetLoading(false);
+        drawerMsg('删除失败：' + err.message, 'err');
+        _confirmDel.classList.remove('is-open');
+        _btnDelete.style.display = '';
       });
-  }
-
-  function editPrice(id, currentPrice) {
-    var input = prompt('输入新价格（铂金）：', currentPrice);
-    if (input === null) return;
-    var price = parseInt(input, 10);
-    if (!price || price < 1) { alert('价格无效。'); return; }
-    patchOrder(id, { platinum: price });
-  }
+  });
 
   function bindOrderActions() {
-    // 可见性切换
+    // 可见性快捷切换（直接切，不开抽屉）
     [].slice.call(document.querySelectorAll('.bw-act-vis')).forEach(function (btn) {
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
         var id      = btn.dataset.id;
         var visible = btn.dataset.visible === 'true';
-        patchOrder(id, { visible: visible });
+        patchOrder(id, { visible: visible }).catch(function (err) {
+          alert('操作失败：' + err.message);
+        });
       });
     });
-    // 改价
+    // 编辑按钮 → 打开抽屉
     [].slice.call(document.querySelectorAll('.bw-act-edit')).forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        editPrice(btn.dataset.id, btn.dataset.price);
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = btn.dataset.id;
+        var order = _ordersCache.find(function (o) { return o.id === id; });
+        if (order) openDrawer(order);
       });
     });
-    // 删除
+    // 删除快捷键 → 打开抽屉并直接展开确认
     [].slice.call(document.querySelectorAll('.bw-act-del')).forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        deleteOrder(btn.dataset.id);
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = btn.dataset.id;
+        var order = _ordersCache.find(function (o) { return o.id === id; });
+        if (order) {
+          openDrawer(order);
+          _confirmDel.classList.add('is-open');
+          _btnDelete.style.display = 'none';
+        }
       });
     });
   }

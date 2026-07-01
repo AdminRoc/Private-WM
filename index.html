@@ -48,6 +48,56 @@
     </section>
   </main>
 
+  <!-- 编辑抽屉 -->
+  <div id="bw-drawer-overlay" class="bw-drawer-overlay"></div>
+  <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="编辑挂单">
+    <div class="bw-drawer-header">
+      <span class="bw-drawer-title" id="bw-drawer-item-name">—</span>
+      <button class="bw-drawer-close" id="bw-drawer-close" title="关闭">✕</button>
+    </div>
+    <div class="bw-drawer-body">
+      <div class="bw-drawer-type-badge" id="bw-drawer-type-badge"></div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label">可见性</label>
+        <div class="bw-vis-pills" id="bw-drawer-vis-pills">
+          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">可见</button>
+          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">隐藏</button>
+        </div>
+      </div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label" for="bw-drawer-price">价格（铂金）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-drawer-price" class="bw-drawer-input" min="1" max="900000" placeholder="例如: 120">
+          <span class="bw-drawer-input-unit">p</span>
+        </div>
+      </div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label" for="bw-drawer-qty">数量</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-drawer-qty" class="bw-drawer-input" min="1" max="9999" placeholder="例如: 1">
+        </div>
+      </div>
+
+      <div class="bw-drawer-actions">
+        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-drawer-update">更新</button>
+        <button class="bw-drawer-btn bw-drawer-btn-delete" id="bw-drawer-delete">删除挂单</button>
+      </div>
+
+      <div class="bw-drawer-confirm-del" id="bw-drawer-confirm-del">
+        <p class="bw-drawer-confirm-text">确认删除这条挂单？此操作不可撤销。</p>
+        <div class="bw-drawer-confirm-btns">
+          <button class="bw-drawer-btn bw-drawer-btn-cancel" id="bw-drawer-confirm-no">取消</button>
+          <button class="bw-drawer-btn bw-drawer-btn-delete-confirm" id="bw-drawer-confirm-yes">确认删除</button>
+        </div>
+      </div>
+
+      <div class="bw-drawer-msg" id="bw-drawer-msg"></div>
+    </div>
+  </aside>
+
   <script src="js/main.js"></script>
 </body>
 </html>
