@@ -408,30 +408,35 @@ async function getAvgBulk(env) {
   return {};
 }
 
-/* 均价计算通用函数（v2 订单字段：type/user.status/visible/platinum） */
+/* 均价计算通用函数（v2 订单字段：type/user.status/visible/platinum）
+ * 优先用 ingame sell 订单；ingame < 3 时降级到全部 sell 订单，确保所有物品都有均价。
+ */
 function calcAvg(allOrders) {
   const total = allOrders.length;
-  const prices = allOrders
-    .filter(function(o) {
-      const type   = (o.type || o.order_type || o.orderType || '').toLowerCase();
-      const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
-      return type === 'sell' && status === 'ingame' && o.visible !== false;
-    })
-    .map(function(o) { return Number(o.platinum); })
-    .filter(function(p) { return p > 0; })
-    .sort(function(a, b) { return a - b; });
+  function sellPrices(statusFilter) {
+    return allOrders
+      .filter(function(o) {
+        const type   = (o.type || o.order_type || o.orderType || '').toLowerCase();
+        const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
+        const ok = type === 'sell' && o.visible !== false && Number(o.platinum) > 0;
+        return statusFilter ? ok && status === statusFilter : ok;
+      })
+      .map(function(o) { return Number(o.platinum); })
+      .sort(function(a, b) { return a - b; });
+  }
+  const ingame = sellPrices('ingame');
+  const prices = ingame.length >= 3 ? ingame : sellPrices(null);
   const count = prices.length;
-  let avg = null, special = false, lo = 0, hi = 0, used = 0;
+  let avg = null, lo = 0, hi = 0, used = 0;
   if      (count >= 20) { lo = 3; hi = 5; }
   else if (count >= 5)  { lo = 2; hi = 2; }
   else if (count >= 3)  { lo = 1; hi = 1; }
-  else                  { special = true; }
-  if (!special) {
+  if (count > 0) {
     const trimmed = prices.slice(lo, hi ? count - hi : count);
     used = trimmed.length;
     if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
   }
-  return { avg, count, used, total, special: special || undefined };
+  return { avg, count: ingame.length, used, total };
 }
 
 // GET /api/wm/price/:slug —— 均价查询：KV缓存 → 静态文件 → 实时拉取

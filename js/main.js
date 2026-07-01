@@ -161,7 +161,19 @@ async function loadOrders() {
 }
 
 /* ──────────────────────────────────────────────────────────
-   均价获取（队列限速 400ms）
+   预加载全量均价（启动时一次性读取静态 JSON）
+─────────────────────────────────────────────────────────── */
+async function preloadAvgPrices() {
+  try {
+    const r = await fetch('/data/avg_prices_full.json');
+    if (!r.ok) return;
+    const data = await r.json();
+    Object.assign(_avgCache, data);
+  } catch {}
+}
+
+/* ──────────────────────────────────────────────────────────
+   均价获取（队列限速，用于静态文件未覆盖的物品）
 ─────────────────────────────────────────────────────────── */
 const _avgQueue = [];
 let _avgRunning = false;
@@ -177,7 +189,7 @@ async function _drainAvgQueue() {
       if (j.data) { _avgCache[task.slug] = j.data; task.resolve(j.data); }
       else task.resolve(null);
     } catch { task.resolve(null); }
-    await sleep(410);
+    await sleep(80);
   }
   _avgRunning = false;
 }
@@ -370,7 +382,6 @@ function sortOrders(list) {
 function avgBadgeHtml(slug) {
   const c = _avgCache[slug];
   if (!c) return '<span class="bw-avg-badge loading" data-slug="' + slug + '">均价…</span>';
-  if (c.special) return '<span class="bw-avg-badge special" data-slug="' + slug + '">参考价不足</span>';
   if (c.avg === null || c.avg === undefined) return '<span class="bw-avg-badge nodata" data-slug="' + slug + '">暂无均价</span>';
   const tgt = Math.round(c.avg * _mult);
   return '<span class="bw-avg-badge ok" data-slug="' + slug + '">均 ' + c.avg + 'p × ' + _mult + ' = ' + tgt + 'p</span>';
@@ -476,9 +487,7 @@ function loadMissingAvg(list) {
       if (!data) return;
       document.querySelectorAll('.bw-avg-badge[data-slug="' + slug + '"]').forEach(function(el) {
         el.classList.remove('loading');
-        if (data.special) {
-          el.textContent = '参考价不足'; el.classList.add('special');
-        } else if (data.avg === null || data.avg === undefined) {
+        if (data.avg === null || data.avg === undefined) {
           el.textContent = '暂无均价'; el.classList.add('nodata');
         } else {
           const tgt = Math.round(data.avg * _mult);
@@ -488,8 +497,7 @@ function loadMissingAvg(list) {
       });
       document.querySelectorAll('.bw-order-row[data-slug="' + slug + '"]').forEach(function(row) {
         const o = _orders.find(function(x) { return x.id === row.dataset.id; });
-        if (data.special) { row.classList.add('bw-special-row'); }
-        else if (o && data.avg !== null && o.platinum < data.avg * 1.5) row.classList.add('bw-alert-row');
+        if (o && data.avg !== null && o.platinum < data.avg * 1.5) row.classList.add('bw-alert-row');
       });
       updateAlertBadges();
     });
@@ -1152,6 +1160,7 @@ async function main() {
   renderProfile(sess);
   bindEvents();
   await loadItems();
+  preloadAvgPrices();  // 后台预加载，不阻塞订单渲染
   try { await loadOrders(); }
   catch(e) {
     document.getElementById('bw-sell-list').innerHTML = '<div class="bw-empty">加载失败：' + e.message + '</div>';
