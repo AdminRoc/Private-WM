@@ -182,63 +182,62 @@ async function wmFetch(env, path, options) {
    全部需要先通过我方 session 鉴权
 ══════════════════════════════════════════════ */
 
-// GET /api/wm/orders —— 获取全部挂单（含隐藏），仅本账号可见
-async function handleWmOrders(request, env) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
-
-  const resp = await wmFetch(env, `/v2/orders/user/${WM_SLUG}`, {});
-  const text = await resp.text();
+function wmJsonProxy(resp, text) {
   return new Response(text, {
     status:  resp.status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+// GET /api/wm/orders —— 获取全部挂单（含隐藏），仅本账号可见
+async function handleWmOrders(request, env) {
+  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  try {
+    const resp = await wmFetch(env, `/v2/orders/user/${WM_SLUG}`, {});
+    return wmJsonProxy(resp, await resp.text());
+  } catch (e) {
+    return jsonResponse({ error: 'WM API 错误：' + e.message }, 502);
+  }
 }
 
 // POST /api/wm/orders —— 创建新挂单
 async function handleWmOrderCreate(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
-
-  const body = await request.text();
-  const resp = await wmFetch(env, '/v2/orders', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  });
-  const text = await resp.text();
-  return new Response(text, {
-    status:  resp.status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  try {
+    const body = await request.text();
+    const resp = await wmFetch(env, '/v2/orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    });
+    return wmJsonProxy(resp, await resp.text());
+  } catch (e) {
+    return jsonResponse({ error: 'WM API 错误：' + e.message }, 502);
+  }
 }
 
 // PATCH /api/wm/orders/:id —— 修改挂单（改价 / 切换可见性 / 改数量）
 async function handleWmOrderPatch(request, env, orderId) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
-
-  const body = await request.text();
-  const resp = await wmFetch(env, `/v2/orders/${orderId}`, {
-    method:  'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  });
-  const text = await resp.text();
-  return new Response(text, {
-    status:  resp.status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  try {
+    const body = await request.text();
+    const resp = await wmFetch(env, `/v2/orders/${orderId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body,
+    });
+    return wmJsonProxy(resp, await resp.text());
+  } catch (e) {
+    return jsonResponse({ error: 'WM API 错误：' + e.message }, 502);
+  }
 }
 
 // DELETE /api/wm/orders/:id —— 删除挂单
 async function handleWmOrderDelete(request, env, orderId) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
-
-  const resp = await wmFetch(env, `/v2/orders/${orderId}`, { method: 'DELETE' });
-  if (resp.status === 204) return new Response(null, { status: 204 });
-  const text = await resp.text();
-  return new Response(text, {
-    status:  resp.status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  try {
+    const resp = await wmFetch(env, `/v2/orders/${orderId}`, { method: 'DELETE' });
+    if (resp.status === 204) return new Response(null, { status: 204 });
+    return wmJsonProxy(resp, await resp.text());
+  } catch (e) {
+    return jsonResponse({ error: 'WM API 错误：' + e.message }, 502);
+  }
 }
 
 /* ══════════════════════════════════════════════
