@@ -7,7 +7,7 @@
  * 使用前：把下面 BOSSTOOL_ORIGIN 换成你 Cloudflare Pages 项目实际分配到的
  * *.pages.dev 地址（或你后续换的自定义源站地址）。
  */
-const BOSSTOOL_ORIGIN = 'https://REPLACE-ME.pages.dev'; // ← 改成 Private-WM 的 Pages 部署地址
+const BOSSTOOL_ORIGIN = 'https://privatewm.xiang-kun.workers.dev';
 
 export default {
   async fetch(request) {
