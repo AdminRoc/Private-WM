@@ -72,7 +72,8 @@ async function handleLogin(request, env) {
   if (hash !== expectedHash) return jsonResponse({ error: '账号或口令不正确' }, 401);
 
   const token = randomToken();
-  await env.BW_SESSIONS.put('current_session', JSON.stringify({ token, email, loginAt: Date.now() }), {
+  /* 用 token 本身作 KV key，避免单 key 的最终一致性问题，同时支持多设备同时登录 */
+  await env.BW_SESSIONS.put('sess_' + token, JSON.stringify({ email, loginAt: Date.now() }), {
     expirationTtl: SESSION_TTL,
   });
 
@@ -82,7 +83,9 @@ async function handleLogin(request, env) {
 }
 
 async function handleLogout(request, env) {
-  await env.BW_SESSIONS.delete('current_session');
+  const cookies = parseCookies(request);
+  const token   = cookies[SESSION_COOKIE];
+  if (token) await env.BW_SESSIONS.delete('sess_' + token);
   const resp = jsonResponse({ ok: true });
   resp.headers.set('Set-Cookie', sessionCookieHeader('', 0));
   return resp;
@@ -92,12 +95,11 @@ async function getSessionEmail(request, env) {
   const cookies = parseCookies(request);
   const token   = cookies[SESSION_COOKIE];
   if (!token) return null;
-  const raw = await env.BW_SESSIONS.get('current_session');
+  const raw = await env.BW_SESSIONS.get('sess_' + token);
   if (!raw) return null;
   let rec;
   try { rec = JSON.parse(raw); } catch { return null; }
-  if (!rec || rec.token !== token) return null;
-  return rec.email;
+  return rec ? rec.email : null;
 }
 
 async function handleMe(request, env) {
@@ -389,7 +391,8 @@ async function handleWmPrice(request, env, slug) {
       .filter(function(o) {
         const type   = o.order_type || o.orderType || '';
         const status = (o.user && (o.user.status || o.user.ingame_status)) || '';
-        return type === 'sell' && status === 'ingame' && o.visible !== false;
+        /* 包含 ingame + online，只排除 offline，让均价在无人在线时也能计算 */
+        return type === 'sell' && status !== 'offline' && o.visible !== false;
       })
       .map(function(o) { return o.platinum; })
       .sort(function(a, b) { return a - b; });
