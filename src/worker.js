@@ -51,9 +51,12 @@ function sessionCookieHeader(token, maxAge) {
  * BW_ACCOUNTS_JSON 支持数组 ["a@b.com"] 或对象 {"a@b.com": "任意值"} */
 function isWhitelisted(email, env) {
   try {
-    const raw = JSON.parse(env.BW_ACCOUNTS_JSON || '[]');
+    /* JSON 类型变量已自动解析；Text/Secret 类型是字符串，需手动 parse */
+    const v   = env.BW_ACCOUNTS_JSON;
+    const raw = typeof v === 'string' ? JSON.parse(v) : v;
     if (Array.isArray(raw)) return raw.map(e => String(e).trim().toLowerCase()).includes(email);
-    return Object.keys(raw).some(k => k.trim().toLowerCase() === email);
+    if (raw && typeof raw === 'object') return Object.keys(raw).some(k => k.trim().toLowerCase() === email);
+    return false;
   } catch { return false; }
 }
 
