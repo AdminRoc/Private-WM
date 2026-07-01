@@ -14,6 +14,8 @@ let _items     = [];
 let _lang      = 'zh';
 let _typeF     = 'all';
 let _visF      = 'all';
+let _filterSpecial = false;
+let _filterAlert   = false;
 let _sort      = 'updated_desc';
 let _priceMin  = 0;
 let _priceMax  = Infinity;
@@ -221,6 +223,14 @@ function filtered() {
     if (_priceMin > 0 && price < _priceMin) return false;
     if (_priceMax < Infinity && price > _priceMax) return false;
     if (q && name.indexOf(q) === -1 && nameEn.indexOf(q) === -1) return false;
+    if (_filterSpecial) {
+      const c = _avgCache[o._slug];
+      if (!c || !c.special) return false;
+    }
+    if (_filterAlert) {
+      const c = _avgCache[o._slug];
+      if (!c || c.special || c.avg === null || !(o.platinum < c.avg * 1.5)) return false;
+    }
     return true;
   });
   return sortOrders(list);
@@ -249,6 +259,8 @@ function sortOrders(list) {
 function avgBadgeHtml(slug) {
   const c = _avgCache[slug];
   if (!c) return '<span class="bw-avg-badge loading" data-slug="' + slug + '">均价…</span>';
+  if (c.special) return '<span class="bw-avg-badge special" data-slug="' + slug + '">参考价不足</span>';
+  if (c.avg === null || c.avg === undefined) return '<span class="bw-avg-badge nodata" data-slug="' + slug + '">暂无均价</span>';
   const tgt = Math.round(c.avg * _mult);
   return '<span class="bw-avg-badge ok" data-slug="' + slug + '">均 ' + c.avg + 'p × ' + _mult + ' = ' + tgt + 'p</span>';
 }
@@ -333,7 +345,7 @@ function render() {
   const tot = document.getElementById('bw-total-count');
   if (tot) tot.textContent = _orders.length;
 
-  const hasFilter = _typeF !== 'all' || _visF !== 'all' || _priceMin > 0 || _priceMax < Infinity || _searchQ;
+  const hasFilter = _typeF !== 'all' || _visF !== 'all' || _priceMin > 0 || _priceMax < Infinity || _searchQ || _filterSpecial || _filterAlert;
   document.getElementById('bw-batch-panel').style.display = hasFilter ? 'flex' : 'none';
   document.getElementById('bw-batch-count').textContent = list.length;
 
@@ -354,13 +366,21 @@ function loadMissingAvg(list) {
     fetchAvg(slug).then(function(data) {
       if (!data) return;
       document.querySelectorAll('.bw-avg-badge[data-slug="' + slug + '"]').forEach(function(el) {
-        const tgt = Math.round(data.avg * _mult);
-        el.textContent = '均 ' + data.avg + 'p × ' + _mult + ' = ' + tgt + 'p';
-        el.classList.remove('loading'); el.classList.add('ok');
+        el.classList.remove('loading');
+        if (data.special) {
+          el.textContent = '参考价不足'; el.classList.add('special');
+        } else if (data.avg === null || data.avg === undefined) {
+          el.textContent = '暂无均价'; el.classList.add('nodata');
+        } else {
+          const tgt = Math.round(data.avg * _mult);
+          el.textContent = '均 ' + data.avg + 'p × ' + _mult + ' = ' + tgt + 'p';
+          el.classList.add('ok');
+        }
       });
       document.querySelectorAll('.bw-order-row[data-slug="' + slug + '"]').forEach(function(row) {
         const o = _orders.find(function(x) { return x.id === row.dataset.id; });
-        if (o && o.platinum < data.avg * 1.5) row.classList.add('bw-alert-row');
+        if (data.special) { row.classList.add('bw-special-row'); }
+        else if (o && data.avg !== null && o.platinum < data.avg * 1.5) row.classList.add('bw-alert-row');
       });
       updateAlertBadges();
     });
@@ -802,6 +822,20 @@ function bindEvents() {
       document.querySelectorAll('.bw-vis-f-btn').forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active'); _visF = btn.dataset.vis; render();
     });
+  });
+
+  /* 特殊 / 价格警报 筛选 */
+  document.getElementById('bw-filter-special')?.addEventListener('click', function() {
+    _filterSpecial = !_filterSpecial;
+    this.dataset.active = _filterSpecial ? '1' : '0';
+    this.classList.toggle('active', _filterSpecial);
+    render();
+  });
+  document.getElementById('bw-filter-alert')?.addEventListener('click', function() {
+    _filterAlert = !_filterAlert;
+    this.dataset.active = _filterAlert ? '1' : '0';
+    this.classList.toggle('active', _filterAlert);
+    render();
   });
 
   /* 价格区间 */

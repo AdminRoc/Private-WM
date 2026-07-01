@@ -406,20 +406,29 @@ async function handleWmPrice(request, env, slug) {
       .filter(function(p) { return p > 0; })
       .sort(function(a, b) { return a - b; });
 
-    let avg = null;
     const count = prices.length;
-    let used = 0;
+    let avg = null;
+    let special = false;
+    let lo = 0, hi = 0, used = 0;
 
-    if (count > 0) {
-      const lo = Math.min(3, Math.floor(count / 5));
-      const hi = Math.min(5, Math.floor(count / 4));
-      const end = Math.max(lo + 1, count - hi);
-      const trimmed = prices.slice(lo, end);
-      used = trimmed.length;
-      avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
+    if (count >= 20) {
+      lo = 3; hi = 5;
+    } else if (count >= 5) {
+      lo = 2; hi = 2;
+    } else if (count >= 3) {
+      lo = 1; hi = 1;
+    } else {
+      // < 3 个 ingame 卖家 → 标记为特殊，不计算均价
+      special = true;
     }
 
-    const result = { avg, count, used, total };
+    if (!special) {
+      const trimmed = prices.slice(lo, count - hi);
+      used = trimmed.length;
+      if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
+    }
+
+    const result = { avg, count, used, total, special: special || undefined };
     if (avg !== null) {
       await env.BW_SESSIONS.put(cacheKey, JSON.stringify(result), { expirationTtl: WM_PRICE_TTL });
     }
