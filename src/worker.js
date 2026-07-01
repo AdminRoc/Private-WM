@@ -133,43 +133,51 @@ function extractCookieValue(setCookieHeader, name) {
 }
 
 async function wmSignin(env) {
-  // ① GET 登录页 HTML，解析 <meta name="csrf-token" content="...">
+  // ① GET 登录页 HTML，同时收集 session cookie 和 CSRF token
+  //    WM 服务器把 CSRF token 嵌在 <meta name="csrf-token"> 中，
+  //    且 token 与本次 GET 建立的 server-side session 绑定，
+  //    所以 POST 时必须带回同一批 Set-Cookie 才能通过验证。
   const pageResp = await fetch('https://warframe.market/auth/signin', {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
     },
   });
   const html = await pageResp.text();
 
-  // WM 把 CSRF token 放在 <meta name="csrf-token" content="##xxxxx">
+  // 从 meta 标签提取 CSRF token
   const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
                  || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
   const csrfToken = metaMatch ? metaMatch[1] : null;
+  if (!csrfToken) throw new Error('WM signin: csrf-token meta not found in page');
 
-  // 把页面返回的所有 Set-Cookie 也带上（维持会话连续性）
-  const pageCookies = pageResp.headers.get('Set-Cookie') || '';
-  const sessionCookies = pageCookies.split(',')
-    .map(c => c.trim().split(';')[0])   // 每条只取 name=value 部分
-    .filter(Boolean)
-    .join('; ');
+  // 收集 Set-Cookie（Cloudflare Workers 中多个 Set-Cookie 头被合并为逗号分隔串，
+  // 但 cookie 值本身也可能含逗号，所以逐条用正则提取 name=value 部分）
+  const rawSetCookie = pageResp.headers.get('Set-Cookie') || '';
+  // 按 Set-Cookie 边界拆分：每条结束于下一个 ", <name>=" 或字符串末尾
+  const cookiePairs = [];
+  const cookieSegRe = /([^=,\s]+=[^;]+?)(?:;\s*(?:Path|Domain|Expires|Max-Age|SameSite|Secure|HttpOnly)[^,]*)*/gi;
+  let m;
+  while ((m = cookieSegRe.exec(rawSetCookie)) !== null) {
+    cookiePairs.push(m[1].trim());
+  }
+  const sessionCookieStr = cookiePairs.join('; ');
 
-  // ② POST signin，带 CSRF token header
+  // ② POST signin
+  //    实际 header 名（WM 前端代码）：x-csrftoken（全小写，无连字符）
   const postHeaders = {
     'Content-Type':    'application/json',
+    'Accept':          'application/json',
     'Origin':          'https://warframe.market',
     'Referer':         'https://warframe.market/auth/signin',
     'Platform':        'pc',
     'Language':        'en',
     'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'X-Requested-With': 'XMLHttpRequest',
+    'x-csrftoken':     csrfToken,
   };
-  if (csrfToken) {
-    postHeaders['X-CSRF-Token']  = csrfToken;
-    postHeaders['X-CSRF-TOKEN']  = csrfToken;
-  }
-  if (sessionCookies) {
-    postHeaders['Cookie'] = sessionCookies;
+  if (sessionCookieStr) {
+    postHeaders['Cookie'] = sessionCookieStr;
   }
 
   const resp = await fetch(`${WM_API}/v1/auth/signin`, {
