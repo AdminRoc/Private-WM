@@ -44,8 +44,8 @@
           </div>
           <div class="bw-filter-group">
             <button class="bw-vis-f-btn active" data-vis="all">全部</button>
-            <button class="bw-vis-f-btn" data-vis="visible">上架中</button>
-            <button class="bw-vis-f-btn" data-vis="hidden">已下架</button>
+            <button class="bw-vis-f-btn" data-vis="visible">显示中</button>
+            <button class="bw-vis-f-btn" data-vis="hidden">已隐藏</button>
           </div>
           <div class="bw-price-range">
             <input type="number" id="bw-price-min" class="bw-range-input" placeholder="最低价" min="0">
@@ -97,9 +97,11 @@
             </div>
           </div>
 
-          <!-- 全部上架 / 下架 -->
-          <button class="bw-vis-all-btn" id="bw-vis-show-all" title="全部上架">上架全部</button>
-          <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="全部下架">下架全部</button>
+          <!-- 刷新物品缓存 -->
+          <button class="bw-vis-all-btn" id="bw-refresh-items-btn" title="重新拉取物品数据（含中文名）" style="border-color:rgba(80,160,240,.4);color:rgba(80,160,240,.85)">↺ 刷新物品</button>
+          <!-- 全部显示 / 隐藏 -->
+          <button class="bw-vis-all-btn" id="bw-vis-show-all" title="显示全部订单">显示全部</button>
+          <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="隐藏全部订单">隐藏全部</button>
 
           <button class="bw-create-btn" id="bw-create-btn">＋ 创建订单</button>
         </div>
@@ -178,8 +180,8 @@
       <div class="bw-drawer-field">
         <label class="bw-drawer-label">可见性</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">上架</button>
-          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">下架</button>
+          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">显示</button>
+          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">隐藏</button>
         </div>
       </div>
 
@@ -253,8 +255,8 @@
       <div class="bw-drawer-field">
         <label class="bw-drawer-label">可见性</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill active" id="bw-create-vis-on">上架</button>
-          <button class="bw-vis-pill" id="bw-create-vis-off">下架</button>
+          <button class="bw-vis-pill active" id="bw-create-vis-on">显示</button>
+          <button class="bw-vis-pill" id="bw-create-vis-off">隐藏</button>
         </div>
       </div>
 

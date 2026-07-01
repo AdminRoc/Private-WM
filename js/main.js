@@ -283,10 +283,10 @@ function mkRow(o) {
     </div>
   </div>
   <div class="bw-order-right">
-    ${isHidden ? '<span class="bw-hidden-badge">下架</span>' : ''}
+    ${isHidden ? '<span class="bw-hidden-badge">已隐藏</span>' : ''}
     <span class="bw-order-price">${o.platinum}p</span>
     <div class="bw-order-actions">
-      <button class="bw-act-btn bw-act-vis${isHidden ? ' is-hidden' : ''}" data-id="${o.id}">${isHidden ? '上架' : '下架'}</button>
+      <button class="bw-act-btn bw-act-vis${isHidden ? ' is-hidden' : ''}" data-id="${o.id}">${isHidden ? '显示' : '隐藏'}</button>
       <button class="bw-act-btn bw-act-edit" data-id="${o.id}">编辑</button>
       <button class="bw-act-btn bw-act-del" data-id="${o.id}">删</button>
     </div>
@@ -416,7 +416,7 @@ async function toggleDetail(id) {
 <div class="bw-detail-row"><div class="bw-detail-label">类型</div><div class="bw-detail-val">${(o.order_type||o.orderType)==='sell'?'出售':'求购'}</div></div>
 <div class="bw-detail-row"><div class="bw-detail-label">价格</div><div class="bw-detail-val">${o.platinum}p</div></div>
 <div class="bw-detail-row"><div class="bw-detail-label">数量</div><div class="bw-detail-val">${o.quantity||1}</div></div>
-<div class="bw-detail-row"><div class="bw-detail-label">可见性</div><div class="bw-detail-val">${o.visible===false?'已下架':'上架中'}</div></div>
+<div class="bw-detail-row"><div class="bw-detail-label">可见性</div><div class="bw-detail-val">${o.visible===false?'已隐藏':'显示中'}</div></div>
 ${o.mod_rank!==undefined?'<div class="bw-detail-row"><div class="bw-detail-label">阶数</div><div class="bw-detail-val">'+o.mod_rank+'</div></div>':''}
 <div class="bw-detail-row"><div class="bw-detail-label">最后更新</div><div class="bw-detail-val">${ago(o.last_update)}</div></div>`;
 
@@ -641,26 +641,30 @@ function setupItemSearch() {
     const text = q.value.trim().toLowerCase();
     hid.value = ''; _createItemId = '';
     if (!text) { dd.innerHTML = ''; return; }
+    /* 字段：worker返回 { id, slug, zh, en, thumb, ... } */
     const matches = _items.filter(function(i) {
-      const zh = (i.zh || (i.i18n && i.i18n['zh-hans']) || '').toLowerCase();
-      const en = (i.en_name || i.name || i.url_name || '').toLowerCase();
+      const zh = (i.zh || '').toLowerCase();
+      const en = (i.en || i.slug || '').toLowerCase();
       return zh.indexOf(text) !== -1 || en.indexOf(text) !== -1;
-    }).slice(0, 30);
+    }).slice(0, 40);
     if (matches.length === 0) { dd.innerHTML = '<div class="bw-item-drop-empty">无匹配结果</div>'; return; }
     dd.innerHTML = matches.map(function(i) {
-      const zh = i.zh || (i.i18n && i.i18n['zh-hans']) || '';
-      const en = i.en_name || i.name || i.url_name || '';
-      return '<div class="bw-item-drop-row" data-id="'+(i.url_name||i.id)+'" data-zh="'+zh+'" data-en="'+en+'">'
-        +'<span class="bw-item-drop-zh">'+(zh||en)+'</span>'
-        +'<span class="bw-item-drop-en">'+(zh?en:'')+'</span></div>';
+      const zh = i.zh || '';
+      const en = i.en  || i.slug || '';
+      /* 区分：zh 和 en 相同说明没有中文名，只显示英文 */
+      const showZh = zh && zh !== en;
+      return '<div class="bw-item-drop-row" data-id="'+(i.slug||i.id)+'" data-zh="'+zh+'" data-en="'+en+'">'
+        +'<span class="bw-item-drop-zh">'+(showZh ? zh : en)+'</span>'
+        +'<span class="bw-item-drop-en">'+(showZh ? en : '')+'</span></div>';
     }).join('');
     dd.querySelectorAll('.bw-item-drop-row').forEach(function(row) {
       row.addEventListener('click', function() {
         const zh = row.dataset.zh, en = row.dataset.en;
-        q.value = (_lang === 'zh' && zh) ? zh : en;
+        const showZh = zh && zh !== en;
+        q.value = (_lang === 'zh' && showZh) ? zh : en;
         hid.value = row.dataset.id; _createItemId = row.dataset.id;
         dd.innerHTML = '';
-        const item = _items.find(function(i) { return (i.url_name||i.id) === _createItemId; });
+        const item = _items.find(function(i) { return (i.slug||i.id) === _createItemId; });
         if (item) updateCreateFields(item);
       });
     });
@@ -674,7 +678,7 @@ function _showField(id, show) { document.getElementById(id).style.display = show
 
 function updateCreateFields(item) {
   const tags     = item.tags || [];
-  const urlName  = item.url_name || item.slug || '';
+  const urlName  = item.slug || item.url_name || item.id || '';
   const isRiven  = tags.includes('riven')  || urlName.includes('riven');
   const isLich   = tags.includes('lich')   || urlName.includes('kuva_lich') || urlName.includes('_lich');
   const isSister = tags.includes('sister') || urlName.includes('sister')    || urlName.includes('parvos');
@@ -765,6 +769,23 @@ function bindEvents() {
     document.getElementById('bw-lang-zh').classList.toggle('active', _lang === 'zh');
     document.getElementById('bw-lang-en').classList.toggle('active', _lang === 'en');
     render();
+  });
+
+  /* 刷新物品缓存 */
+  document.getElementById('bw-refresh-items-btn')?.addEventListener('click', async function() {
+    var btn = this;
+    btn.disabled = true; btn.textContent = '刷新中…';
+    try {
+      await apiFetch('/refresh-items', { method: 'POST' });
+      await loadItems();
+      btn.textContent = '↺ 刷新物品';
+      btn.disabled = false;
+      showToast && showToast('物品缓存已刷新');
+    } catch(e) {
+      btn.textContent = '↺ 刷新物品';
+      btn.disabled = false;
+      alert('刷新失败: ' + (e.message || e));
+    }
   });
 
   /* 类型筛选 */

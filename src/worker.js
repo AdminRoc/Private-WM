@@ -361,6 +361,7 @@ async function handleWmOrderDelete(request, env, orderId) {
 
 // GET /api/wm/price/:slug —— 计算物品"均价"
 // 规则：筛选在线ingame且出售中订单，去掉最高5个+最低3个，取均值
+// 使用 WM v1 公开端点（无需 JWT，更稳定）
 async function handleWmPrice(request, env, slug) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
@@ -371,17 +372,27 @@ async function handleWmPrice(request, env, slug) {
   }
 
   try {
-    const resp = await wmFetch(env, `/v2/orders/item/${encodeURIComponent(slug)}`, {});
+    /* v1 公开接口，不需要 JWT，响应格式：{ payload: { sell_orders: [...] } } */
+    const resp = await fetch(
+      `${WM_API}/v1/items/${encodeURIComponent(slug)}/orders`,
+      { headers: { 'Platform': 'pc', 'Language': 'en', 'Accept': 'application/json' } }
+    );
     if (!resp.ok) return jsonResponse({ data: { avg: null, count: 0, used: 0 } });
 
     const json = await resp.json();
-    // 过滤：sell 类型 + 卖家状态 ingame + visible
-    const prices = (json.data || [])
-      .filter(o => (o.orderType === 'sell' || o.order_type === 'sell') &&
-                   o.user && o.user.status === 'ingame' &&
-                   o.visible !== false)
-      .map(o => o.platinum)
-      .sort((a, b) => a - b);
+    /* v1: payload.sell_orders；兼容 v2: data */
+    const allOrders = (json.payload && json.payload.sell_orders)
+                   || (json.payload && json.payload.orders)
+                   || json.data || [];
+
+    const prices = allOrders
+      .filter(function(o) {
+        const type   = o.order_type || o.orderType || '';
+        const status = (o.user && (o.user.status || o.user.ingame_status)) || '';
+        return type === 'sell' && status === 'ingame' && o.visible !== false;
+      })
+      .map(function(o) { return o.platinum; })
+      .sort(function(a, b) { return a - b; });
 
     let avg = null;
     const count = prices.length;
@@ -390,11 +401,12 @@ async function handleWmPrice(request, env, slug) {
     if (count > 0) {
       const lo = Math.min(3, Math.floor(count / 5));
       const hi = Math.min(5, Math.floor(count / 4));
-      const trimmed = prices.slice(lo, count - hi > lo ? count - hi : count);
+      const end = count - hi > lo ? count - hi : count;
+      const trimmed = prices.slice(lo, end);
       used = trimmed.length;
       avg = used > 0
-        ? Math.round(trimmed.reduce((s, v) => s + v, 0) / trimmed.length)
-        : Math.round(prices.reduce((s, v) => s + v, 0) / count);
+        ? Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used)
+        : Math.round(prices.reduce(function(s, v) { return s + v; }, 0) / count);
     }
 
     const result = { avg, count, used };
