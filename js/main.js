@@ -80,8 +80,8 @@
     var item    = (o.item && (o.item.zh || o.item.en || o.item.slug)) || o.itemId || '—';
     var qty     = o.quantity ? '×' + o.quantity : '';
     var hidden  = o.visible === false;
-    var visIcon = hidden ? '👁' : '👁';
     var visTip  = hidden ? '当前隐藏，点击显示' : '当前显示，点击隐藏';
+    var visLabel = hidden ? '显示' : '隐藏';
 
     return '<div class="bw-order-row' + (hidden ? ' bw-order-hidden' : '') + '" data-id="' + esc(o.id) + '">' +
       '<span class="bw-order-item">' + esc(item) + '</span>' +
@@ -91,9 +91,9 @@
       '</span>' +
       (hidden ? '<span class="bw-hidden-badge">隐藏</span>' : '') +
       '<div class="bw-order-actions">' +
-        '<button class="bw-act-btn bw-act-vis' + (hidden ? ' is-hidden' : '') + '" data-id="' + esc(o.id) + '" data-visible="' + (!hidden) + '" title="' + visTip + '">' + visIcon + '</button>' +
-        '<button class="bw-act-btn bw-act-edit" data-id="' + esc(o.id) + '" data-price="' + esc(o.platinum) + '" title="修改价格">✏</button>' +
-        '<button class="bw-act-btn bw-act-del" data-id="' + esc(o.id) + '" title="删除">✕</button>' +
+        '<button class="bw-act-btn bw-act-vis' + (hidden ? ' is-hidden' : '') + '" data-id="' + esc(o.id) + '" data-visible="' + (!hidden) + '" title="' + esc(visTip) + '">' + esc(visLabel) + '</button>' +
+        '<button class="bw-act-btn bw-act-edit" data-id="' + esc(o.id) + '" title="编辑挂单">编辑</button>' +
+        '<button class="bw-act-btn bw-act-del" data-id="' + esc(o.id) + '" title="删除挂单">删除</button>' +
       '</div>' +
     '</div>';
   }

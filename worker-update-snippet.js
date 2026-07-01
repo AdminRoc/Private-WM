@@ -37,11 +37,18 @@ export default {
     };
 
     // ── war-frame.com / www.war-frame.com 单独移出 redirectMap：改为反代直出 ──
-    // 注：www.war-frame.com 原本在 redirectMap 里跳去合并文档站，现按你这次的
-    // 要求，只有它和裸域 war-frame.com 这两个改接 BossTool，其它子域名维持原样。
     if (hostname === "war-frame.com" || hostname === "www.war-frame.com") {
       const upstreamUrl = BOSSTOOL_ORIGIN + url.pathname + url.search;
-      const upstreamReq = new Request(upstreamUrl, request);
+      // 必须重建 Headers 并删掉原始 Host，否则 Cloudflare 看到
+      // Host: war-frame.com 与目标 workers.dev 不匹配，直接报 1101。
+      const headers = new Headers(request.headers);
+      headers.delete('host');
+      const upstreamReq = new Request(upstreamUrl, {
+        method:  request.method,
+        headers,
+        body:    (request.method !== 'GET' && request.method !== 'HEAD') ? request.body : undefined,
+        redirect: 'follow',
+      });
       return fetch(upstreamReq);
     }
 
