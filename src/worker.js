@@ -18,7 +18,7 @@ const WM_JWT_TTL      = 60 * 60 * 12;
 const WM_ITEMS_KV_KEY    = 'wm_items_cache';
 const WM_ITEMS_TTL       = 60 * 60;
 const WM_PRICE_TTL       = 60 * 5;
-const PRICE_BATCH_SIZE   = 600;          // 每次 Cron 处理的物品数，约 5 分钟
+const PRICE_BATCH_SIZE   = 2000;         // 每次 Cron 处理的物品数；3834条÷2000≈2轮≈2小时一完整周期
 const PRICE_OFFSET_KEY   = 'price_compute_offset';
 const PRICE_KV_TTL       = 60 * 60 * 25; // 25h：覆盖至少一个完整轮次
 
@@ -602,8 +602,8 @@ async function computePricesBatch(env) {
       const result = { avg, count, used, total: allOrders.length, special: special || undefined };
       await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: PRICE_KV_TTL });
     } catch {}
-    // 随机 400-700ms 间隔，约 1.7 req/s，低于 WM 限速
-    await new Promise(function(r) { setTimeout(r, 400 + Math.random() * 300); });
+    // 随机 200-400ms 间隔，约 3 req/s，实测 WM 不限速
+    await new Promise(function(r) { setTimeout(r, 200 + Math.random() * 200); });
   }
 
   // 保存新偏移量（本批结束位置）
