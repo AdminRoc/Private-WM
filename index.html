@@ -111,8 +111,8 @@
         </div>
       </div>
 
-      <!-- 批量操作面板（筛选激活时显示） -->
-      <div class="bw-batch-panel" id="bw-batch-panel" style="display:none">
+      <!-- 批量操作面板（始终显示） -->
+      <div class="bw-batch-panel" id="bw-batch-panel">
         <span class="bw-batch-label">批量操作（当前筛选 <span id="bw-batch-count">0</span> 条）：</span>
         <div class="bw-batch-row">
           <label class="bw-batch-field-label">改价格</label>
@@ -125,7 +125,9 @@
           <button class="bw-batch-btn" id="bw-batch-qty-btn">执行</button>
         </div>
         <div class="bw-batch-row">
-          <label class="bw-batch-field-label">批量刷新均价倍率</label>
+          <label class="bw-batch-field-label">批量改均价倍率</label>
+          <input type="number" id="bw-batch-mult-input" class="bw-batch-input" placeholder="倍率" min="0.1" step="0.1" value="1">
+          <span class="bw-batch-field-label">×</span>
           <button class="bw-batch-btn" id="bw-batch-mult-btn">应用当前倍率</button>
         </div>
         <div class="bw-batch-progress" id="bw-batch-progress" style="display:none">

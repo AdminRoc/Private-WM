@@ -456,8 +456,6 @@ function render() {
   const tot = document.getElementById('bw-total-count');
   if (tot) tot.textContent = _orders.length;
 
-  const hasFilter = _typeF !== 'all' || _visF !== 'all' || _priceMin > 0 || _priceMax < Infinity || _searchQ || _filterSpecial || _filterAlert;
-  document.getElementById('bw-batch-panel').style.display = hasFilter ? 'flex' : 'none';
   document.getElementById('bw-batch-count').textContent = list.length;
 
   updateAlertSection(list);
@@ -1111,9 +1109,12 @@ function bindEvents() {
     await batchOp(filtered(), function() { return { quantity: val }; });
   });
   document.getElementById('bw-batch-mult-btn')?.addEventListener('click', async function() {
+    const multInput = document.getElementById('bw-batch-mult-input');
+    const batchMult = multInput ? (parseFloat(multInput.value) || _mult) : _mult;
     await batchOp(filtered(), function(o) {
       const c = _avgCache[o._slug]; if (!c) return null;
-      return { platinum: Math.round(c.avg * _mult) };
+      const p = Math.round(c.avg * batchMult);
+      return p >= 1 ? { platinum: p } : null;
     });
   });
 
