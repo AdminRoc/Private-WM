@@ -728,6 +728,14 @@ function bindEvents() {
     document.getElementById('bw-create-vis-off').classList.add('active');
     document.getElementById('bw-create-vis-on').classList.remove('active');
   });
+  document.getElementById('bw-create-ephemera-no')?.addEventListener('click', function() {
+    document.getElementById('bw-create-ephemera-no').classList.add('active');
+    document.getElementById('bw-create-ephemera-yes').classList.remove('active');
+  });
+  document.getElementById('bw-create-ephemera-yes')?.addEventListener('click', function() {
+    document.getElementById('bw-create-ephemera-yes').classList.add('active');
+    document.getElementById('bw-create-ephemera-no').classList.remove('active');
+  });
 
   document.getElementById('bw-create-submit')?.addEventListener('click', async function() {
     const msg = document.getElementById('bw-create-msg');
@@ -736,8 +744,29 @@ function bindEvents() {
     const qty   = +document.getElementById('bw-create-qty').value || 1;
     if (!price || price < 1) { msg.textContent = '请输入有效价格'; msg.className = 'bw-drawer-msg err'; return; }
     const body = { item_id: _createItemId, order_type: _createType, platinum: price, quantity: qty, visible: _createVis };
-    if (document.getElementById('bw-create-rank-wrap').style.display !== 'none') {
-      body.mod_rank = +document.getElementById('bw-create-rank').value || 0;
+    const vis = function(id) { return document.getElementById(id).style.display !== 'none'; };
+    if (vis('bw-create-rank-wrap'))    body.mod_rank       = +document.getElementById('bw-create-rank').value    || 0;
+    if (vis('bw-create-mastery-wrap')) body.mastery_rank   = +document.getElementById('bw-create-mastery').value || 0;
+    if (vis('bw-create-rerolls-wrap')) body.re_rolls       = +document.getElementById('bw-create-rerolls').value || 0;
+    if (vis('bw-create-per-trade-wrap')) body.quantity_in_set = +document.getElementById('bw-create-per-trade').value || 1;
+    if (vis('bw-create-lichname-wrap')) {
+      const n = document.getElementById('bw-create-lichname').value.trim();
+      if (n) body.name = n;
+    }
+    if (vis('bw-create-element-wrap')) {
+      const el = document.getElementById('bw-create-element').value;
+      if (el) body.element = el;
+    }
+    if (vis('bw-create-ephemera-wrap')) {
+      body.ephemera = document.getElementById('bw-create-ephemera-yes').classList.contains('active');
+    }
+    if (vis('bw-create-quirk-wrap')) {
+      const q = document.getElementById('bw-create-quirk').value.trim();
+      if (q) body.quirk = q;
+    }
+    if (vis('bw-create-subtype-wrap')) {
+      const sub = document.getElementById('bw-create-subtype').value;
+      if (sub) body.subtype = sub;
     }
     msg.textContent = '创建中…'; msg.className = 'bw-drawer-msg';
     try {
