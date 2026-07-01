@@ -430,7 +430,7 @@ function calcAvg(allOrders) {
   let avg = null, lo = 0, hi = 0, used = 0;
   if      (count >= 20) { lo = 3; hi = 5; }
   else if (count >= 5)  { lo = 2; hi = 2; }
-  else if (count >= 3)  { lo = 1; hi = 1; }
+  /* count ≤ 3 时不裁剪，直接用全部订单计算 */
   if (count > 0) {
     const trimmed = prices.slice(lo, hi ? count - hi : count);
     used = trimmed.length;
