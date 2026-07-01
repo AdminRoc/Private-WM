@@ -4,209 +4,280 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>登录 — CSC·Alliance：Boss Tool</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"></noscript>
+  <link rel="icon" type="image/png" href="picture/websitelogo.png">
   <link rel="stylesheet" href="css/main.css">
   <style>
-    /* ── 登录页专属布局 ── */
-    .bw-login-wrap {
-      min-height: calc(100vh - 84px);
+    /* ══════════════════════════════
+       登录页专属样式
+       ══════════════════════════════ */
+    body { overflow: hidden; }
+
+    .bw-login-page {
+      position: fixed; inset: 0; z-index: 2;
       display: flex; align-items: center; justify-content: center;
-      position: relative; z-index: 2;
-      padding: 2rem 1.4rem;
     }
 
-    /* 卡片后面的光晕光圈 */
-    .bw-login-glow {
-      position: absolute;
-      width: 520px; height: 520px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(192,148,58,.09) 0%, rgba(192,148,58,.03) 45%, transparent 70%);
-      pointer-events: none;
-      animation: loginGlowPulse 4s ease-in-out infinite;
+    /* 中心放射状大光晕 */
+    .bw-login-halo {
+      position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 60% 55% at 50% 50%,
+        rgba(192,148,58,.13) 0%, rgba(192,148,58,.04) 45%, transparent 70%);
+      animation: haloBreath 5s ease-in-out infinite;
     }
-    @keyframes loginGlowPulse {
-      0%, 100% { transform: scale(1);   opacity: .7; }
-      50%       { transform: scale(1.1); opacity: 1; }
+    @keyframes haloBreath {
+      0%,100% { transform: scale(1);    opacity: .8; }
+      50%      { transform: scale(1.08); opacity: 1; }
     }
 
-    /* 卡片主体 */
+    /* 横向扫描线背景 */
+    .bw-login-scan {
+      position: fixed; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg, transparent 0px, transparent 3px,
+        rgba(212,168,74,.018) 3px, rgba(212,168,74,.018) 4px
+      );
+    }
+
+    /* 斜向角落装饰光 */
+    .bw-login-corner-glow {
+      position: fixed; pointer-events: none;
+      width: 300px; height: 300px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(192,148,58,.08) 0%, transparent 70%);
+    }
+    .bw-login-corner-glow.tl { top: -100px; left: -100px; }
+    .bw-login-corner-glow.br { bottom: -100px; right: -100px; }
+
+    /* ── 卡片 ── */
     .bw-login-card {
       position: relative; z-index: 1;
-      width: 100%; max-width: 400px;
-      background: linear-gradient(160deg, rgba(12,18,38,.92) 0%, rgba(8,13,26,.96) 100%);
-      border: 1px solid var(--c-gold-faint);
-      border-radius: 16px;
-      padding: 2.6rem 2.2rem 2.2rem;
-      box-shadow: 0 0 60px rgba(0,0,0,.6), 0 0 0 1px rgba(192,148,58,.04);
-      backdrop-filter: blur(12px);
+      width: 500px; max-width: calc(100vw - 2.4rem);
+      background: linear-gradient(155deg, rgba(14,20,44,.96) 0%, rgba(7,10,22,.98) 100%);
+      border: 1px solid rgba(185,142,52,.22);
       overflow: hidden;
-      opacity: 0; transform: translateY(20px) scale(.98);
-      animation: loginCardIn .65s cubic-bezier(.22,.68,0,1.1) .1s forwards;
+      opacity: 0; transform: translateY(32px) scale(.97);
+      animation: cardIn .72s cubic-bezier(.22,.68,0,1.12) .08s forwards;
     }
-    @keyframes loginCardIn {
+    @keyframes cardIn {
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* 卡片顶部金线 */
+    /* 顶部金线 */
     .bw-login-card::before {
       content: '';
-      position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
-      background: linear-gradient(90deg, transparent, var(--c-gold-bright), transparent);
-      opacity: .6;
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(212,168,74,.7) 25%,
+        #e8c86a 50%,
+        rgba(212,168,74,.7) 75%,
+        transparent 100%);
+      box-shadow: 0 0 18px rgba(212,168,74,.5);
     }
-    /* 扫光动画 */
+
+    /* 斜向扫光 */
     .bw-login-card::after {
       content: '';
-      position: absolute; top: -100%; left: -60%; width: 40%; height: 300%;
-      background: linear-gradient(105deg, transparent 30%, rgba(212,168,74,.06) 50%, transparent 70%);
-      animation: loginSweep 5s ease-in-out 1s infinite;
+      position: absolute; top: -100%; left: -55%; width: 32%; height: 300%;
+      background: linear-gradient(108deg,
+        transparent 30%, rgba(212,168,74,.055) 50%, transparent 70%);
+      animation: cardSweep 7s ease-in-out .6s infinite;
       pointer-events: none;
     }
-    @keyframes loginSweep {
-      0%   { transform: translateX(-10%); }
-      40%  { transform: translateX(300%); }
-      100% { transform: translateX(300%); }
+    @keyframes cardSweep {
+      0%   { transform: translateX(-5%);   opacity: 0; }
+      5%   { opacity: 1; }
+      38%  { transform: translateX(400%);  opacity: 1; }
+      42%  { opacity: 0; }
+      100% { transform: translateX(400%);  opacity: 0; }
     }
 
-    /* 徽标区 */
-    .bw-login-badge {
-      display: flex; align-items: center; gap: .7rem; margin-bottom: 1.8rem;
+    /* 四角装饰括号 */
+    .bw-c { position: absolute; width: 16px; height: 16px; pointer-events: none; }
+    .bw-c-tl { top: 0; left: 0;
+      border-top: 2px solid rgba(212,168,74,.6); border-left: 2px solid rgba(212,168,74,.6); }
+    .bw-c-tr { top: 0; right: 0;
+      border-top: 2px solid rgba(212,168,74,.6); border-right: 2px solid rgba(212,168,74,.6); }
+    .bw-c-bl { bottom: 0; left: 0;
+      border-bottom: 2px solid rgba(212,168,74,.6); border-left: 2px solid rgba(212,168,74,.6); }
+    .bw-c-br { bottom: 0; right: 0;
+      border-bottom: 2px solid rgba(212,168,74,.6); border-right: 2px solid rgba(212,168,74,.6); }
+
+    /* ── Hero 区：logo + 标题 ── */
+    .bw-login-hero {
+      padding: 2.6rem 2.8rem 2rem;
+      text-align: center;
+      border-bottom: 1px solid rgba(185,142,52,.12);
+      background: linear-gradient(180deg, rgba(212,168,74,.055) 0%, transparent 100%);
+      opacity: 0;
+      animation: heroIn .6s ease .35s forwards;
     }
-    .bw-login-badge-icon {
-      width: 38px; height: 38px; border-radius: 50%;
-      background: linear-gradient(135deg, rgba(192,148,58,.25), rgba(135,98,32,.1));
-      border: 1px solid var(--c-gold-dim);
-      display: flex; align-items: center; justify-content: center;
-      font-family: var(--f-sci); font-size: .9rem; color: var(--c-gold-bright);
-      box-shadow: 0 0 12px rgba(192,148,58,.2);
-      flex-shrink: 0;
+    @keyframes heroIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .bw-login-badge-text {}
+    .bw-login-logo-img {
+      width: 76px; height: 76px; object-fit: contain;
+      margin: 0 auto 1.1rem;
+      display: block;
+      filter: drop-shadow(0 0 14px rgba(212,168,74,.6)) drop-shadow(0 0 32px rgba(212,168,74,.25));
+      opacity: 0; transform: scale(.75);
+      animation: logoIn .65s cubic-bezier(.34,1.5,.64,1) .5s forwards;
+    }
+    @keyframes logoIn {
+      to { opacity: 1; transform: scale(1); }
+    }
     .bw-login-title {
-      font-family: var(--f-sci); font-size: 1rem; font-weight: 700;
-      color: var(--c-gold-bright); letter-spacing: .05em; line-height: 1.2;
+      font-family: var(--f-main); font-weight: 900; font-size: 1.55rem;
+      letter-spacing: .22em; text-transform: uppercase;
+      color: var(--c-gold-bright);
+      text-shadow: 0 0 28px rgba(212,168,74,.55), 0 0 56px rgba(212,168,74,.2);
+      opacity: 0;
+      animation: fadeUp .5s ease .7s forwards;
     }
     .bw-login-sub {
-      color: var(--c-text2); font-size: .78rem; margin-top: .15rem; line-height: 1.4;
+      font-family: var(--f-main); font-size: .7rem; font-weight: 600;
+      letter-spacing: .24em; text-transform: uppercase;
+      color: rgba(155,185,220,.38); margin-top: .35rem;
+      opacity: 0;
+      animation: fadeUp .5s ease .8s forwards;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* 分割线 */
-    .bw-login-divider {
-      height: 1px; background: var(--c-gold-faint); margin-bottom: 1.6rem;
+    /* ── 表单区 ── */
+    .bw-login-body {
+      padding: 2.2rem 2.8rem 2.6rem;
+      opacity: 0;
+      animation: fadeUp .5s ease .9s forwards;
     }
 
-    /* 字段 */
-    .bw-field { margin-bottom: 1.1rem; }
+    .bw-field { margin-bottom: 1.3rem; }
     .bw-field label {
-      display: block; font-size: .78rem; font-weight: 600;
-      color: var(--c-text2); margin-bottom: .4rem;
-      letter-spacing: .05em; text-transform: uppercase;
+      display: block; font-size: .72rem; font-weight: 700;
+      color: rgba(155,185,220,.5); margin-bottom: .45rem;
+      letter-spacing: .12em; text-transform: uppercase;
     }
-    .bw-field-input-wrap { position: relative; }
     .bw-field input {
-      width: 100%; padding: .7rem .9rem;
-      background: rgba(0,0,0,.4);
-      border: 1px solid var(--c-gold-faint);
-      border-radius: var(--r-md);
-      color: var(--c-white); font-family: var(--f-body); font-size: .98rem;
-      transition: border-color .22s ease, box-shadow .22s ease, background .22s ease;
-    }
-    .bw-field input::placeholder { color: rgba(96,120,152,.5); }
-    .bw-field input:focus {
-      outline: none; border-color: var(--c-gold-mid);
+      width: 100%; padding: .8rem 1.05rem;
       background: rgba(0,0,0,.55);
-      box-shadow: 0 0 0 3px rgba(212,168,74,.1), 0 0 16px rgba(192,148,58,.08);
+      border: 1px solid rgba(185,142,52,.2);
+      border-radius: 0;
+      color: var(--c-white); font-family: var(--f-main); font-size: .96rem;
+      transition: border-color .22s, box-shadow .22s, background .22s;
+    }
+    .bw-field input::placeholder { color: rgba(96,120,152,.38); }
+    .bw-field input:focus {
+      outline: none;
+      border-color: rgba(212,168,74,.62);
+      background: rgba(0,0,0,.68);
+      box-shadow: 0 0 0 3px rgba(212,168,74,.07), inset 3px 0 0 rgba(212,168,74,.55);
     }
 
     /* 登录按钮 */
     .bw-login-btn {
-      width: 100%; padding: .82rem;
-      margin-top: .4rem;
-      background: linear-gradient(135deg, rgba(192,148,58,.2), rgba(135,98,32,.1));
-      border: 1px solid var(--c-gold-mid);
-      border-radius: var(--r-md);
-      color: var(--c-gold-bright); font-family: var(--f-sci); font-weight: 700;
-      font-size: .95rem; letter-spacing: .08em; cursor: pointer;
-      position: relative; overflow: hidden;
-      transition: background .22s ease, box-shadow .22s ease, transform .12s ease;
+      width: 100%; padding: .95rem;
+      margin-top: .5rem;
+      background: linear-gradient(135deg, rgba(192,148,58,.22) 0%, rgba(140,102,30,.14) 100%);
+      border: 1px solid rgba(212,168,74,.55);
+      border-radius: 0;
+      color: var(--c-gold-bright);
+      font-family: var(--f-main); font-weight: 900;
+      font-size: .92rem; letter-spacing: .2em; text-transform: uppercase;
+      cursor: pointer; position: relative; overflow: hidden;
+      transition: background .22s, box-shadow .22s, filter .22s, transform .1s;
     }
     .bw-login-btn::before {
       content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(135deg, rgba(212,168,74,.12), transparent);
-      opacity: 0; transition: opacity .22s ease;
+      position: absolute; top: -100%; left: -60%; width: 40%; height: 300%;
+      background: linear-gradient(108deg, transparent 30%, rgba(255,215,100,.12) 50%, transparent 70%);
+      transition: transform .45s ease;
     }
-    .bw-login-btn:hover { box-shadow: 0 0 24px rgba(195,152,52,.3); }
-    .bw-login-btn:hover::before { opacity: 1; }
-    .bw-login-btn:active { transform: scale(.98); }
-    .bw-login-btn:disabled { opacity: .55; cursor: default; pointer-events: none; }
+    .bw-login-btn:hover {
+      background: linear-gradient(135deg, rgba(212,168,74,.3) 0%, rgba(175,128,42,.18) 100%);
+      box-shadow: 0 0 30px rgba(212,168,74,.3), 0 0 60px rgba(212,168,74,.1);
+      filter: drop-shadow(0 0 12px rgba(212,168,74,.4));
+    }
+    .bw-login-btn:hover::before { transform: translateX(380%); }
+    .bw-login-btn:active { transform: scale(.992); }
+    .bw-login-btn:disabled { opacity: .5; cursor: default; pointer-events: none; }
 
-    /* 错误提示 */
+    /* 错误 */
     .bw-login-err {
-      margin-top: 1rem; padding: .6rem .9rem;
-      border-radius: var(--r-md);
-      background: rgba(203,74,158,.08); border: 1px solid rgba(203,74,158,.3);
-      color: #e8a4cf; font-size: .85rem; line-height: 1.5;
+      margin-top: 1rem; padding: .65rem 1rem;
+      border: 1px solid rgba(203,74,158,.35);
+      background: rgba(203,74,158,.07);
+      color: #e8a4cf; font-size: .84rem; line-height: 1.5;
       display: none;
     }
     .bw-login-err.show { display: block; }
 
-    /* 底部说明 */
+    /* 底部 */
     .bw-login-footer {
-      margin-top: 1.4rem; text-align: center;
-      color: var(--c-text2); font-size: .76rem; line-height: 1.6;
+      margin-top: 1.8rem; text-align: center;
+      color: rgba(155,185,220,.28); font-size: .7rem;
+      letter-spacing: .06em; line-height: 1.9;
+      border-top: 1px solid rgba(185,142,52,.08);
+      padding-top: 1.4rem;
     }
-    .bw-login-footer span { color: rgba(192,148,58,.5); }
+    .bw-login-footer b { color: rgba(212,168,74,.38); font-weight: 400; }
   </style>
 </head>
 <body>
   <canvas id="star-canvas"></canvas>
   <div class="nebula-bg"></div>
+  <div class="bw-login-halo"></div>
+  <div class="bw-login-scan"></div>
+  <div class="bw-login-corner-glow tl"></div>
+  <div class="bw-login-corner-glow br"></div>
 
   <header class="bw-header">
     <div class="bw-brand">
-      <span class="bw-brand-cn">CSC·Alliance</span>
-      <span class="bw-brand-divider"></span>
-      <span class="bw-brand-sub">BOSS TOOL</span>
+      <img src="picture/WS-logo-2.png" class="bw-brand-logo-img" alt="WS">
+      <div class="bw-brand-text">
+        <span class="bw-brand-cn">CSC·Alliance</span>
+        <span class="bw-brand-sub">BOSS TOOL</span>
+      </div>
     </div>
   </header>
 
-  <main class="bw-login-wrap">
-    <div class="bw-login-glow"></div>
+  <div class="bw-login-page">
     <form class="bw-login-card" id="bw-login-form" autocomplete="on">
-      <div class="bw-login-badge">
-        <div class="bw-login-badge-icon">◈</div>
-        <div class="bw-login-badge-text">
-          <div class="bw-login-title">内部登录验证</div>
-          <div class="bw-login-sub">限 CSC·Alliance 白名单账号</div>
-        </div>
-      </div>
-      <div class="bw-login-divider"></div>
+      <!-- 角标 -->
+      <span class="bw-c bw-c-tl"></span>
+      <span class="bw-c bw-c-tr"></span>
+      <span class="bw-c bw-c-bl"></span>
+      <span class="bw-c bw-c-br"></span>
 
-      <div class="bw-field">
-        <label for="bw-email">邮箱</label>
-        <div class="bw-field-input-wrap">
+      <!-- Hero -->
+      <div class="bw-login-hero">
+        <img src="picture/WS-logo-2.png" class="bw-login-logo-img" alt="CSC Alliance">
+        <div class="bw-login-title">Boss Tool</div>
+        <div class="bw-login-sub">CSC · Alliance &nbsp;·&nbsp; 内部系统</div>
+      </div>
+
+      <!-- 表单 -->
+      <div class="bw-login-body">
+        <div class="bw-field">
+          <label for="bw-email">邮箱</label>
           <input type="email" id="bw-email" name="email" required autocomplete="username" placeholder="your@email.com">
         </div>
-      </div>
-      <div class="bw-field">
-        <label for="bw-pass">口令</label>
-        <div class="bw-field-input-wrap">
+        <div class="bw-field">
+          <label for="bw-pass">口令</label>
           <input type="password" id="bw-pass" name="password" required autocomplete="current-password" placeholder="••••••••">
         </div>
-      </div>
 
-      <button type="submit" class="bw-login-btn" id="bw-login-btn">登录</button>
-      <div class="bw-login-err" id="bw-login-err"></div>
+        <button type="submit" class="bw-login-btn" id="bw-login-btn">进入系统</button>
+        <div class="bw-login-err" id="bw-login-err"></div>
 
-      <div class="bw-login-footer">
-        <span>⬡</span> 与 Warframe.market 账号无关 <span>⬡</span>
+        <div class="bw-login-footer">
+          <b>◆</b> 与 Warframe.market 账号无关 <b>◆</b><br>
+          仅限 CSC·Alliance 白名单成员使用
+        </div>
       </div>
     </form>
-  </main>
+  </div>
 
   <script src="js/login.js"></script>
 </body>
