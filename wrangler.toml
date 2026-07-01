@@ -24,4 +24,4 @@ crons = ["0 * * * *"]
 # 格式：{"WM登录邮箱(全小写)": "页面显示的名字"}
 # 新增账号只需加一行 key-value，不需要动其他任何配置。
 [vars]
-BW_ACCOUNTS_JSON = '{"your-wm-email@example.com": "你的显示名"}'
+BW_ACCOUNTS_JSON = '{"chinaxiangkun@gmail.com": "[Admin] Roc"}'
