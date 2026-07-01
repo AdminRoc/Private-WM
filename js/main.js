@@ -201,7 +201,7 @@ function renderProfile(sess) {
   if (!card) return;
   const slug = sess.slug || sess.ingame_name || '—';
   card.innerHTML = `
-<img class="bw-avatar" id="bw-avatar-img" src="/picture/avatar-csc-2026.svg" alt="avatar">
+<img class="bw-avatar" id="bw-avatar-img" src="/picture/csc-logo.png" alt="avatar">
 <div class="bw-profile-info">
   <div class="bw-ign">${slug}</div>
   <div class="bw-meta">
