@@ -780,7 +780,7 @@ function bindEvents() {
       await loadItems();
       btn.textContent = '↺ 刷新物品';
       btn.disabled = false;
-      showToast && showToast('物品缓存已刷新');
+      btn.textContent = '✓ 刷新完成';
     } catch(e) {
       btn.textContent = '↺ 刷新物品';
       btn.disabled = false;

@@ -1,21 +1,23 @@
 /* CSC·Alliance：Boss Tool —— Worker 入口
  *
- * 职责：
- *   ① /api/auth/*   —— 我方站点白名单登录（与 WM 账号无关）。
- *   ② /api/wm/*     —— 后端代理 WM 私有 API（需通过 ① 验证才可调用）。
- *   ③ 其余路径      —— 落到 Workers Static Assets。
+ * 认证模型（v2）：
+ *   用户用自己的 WM 邮箱+密码登录，Worker 代为做 WM signin，
+ *   把用户自己的 WM JWT 存入 KV（key = wm_jwt_{sessionToken}），
+ *   每个用户独立 JWT、独立订单视图，白名单只控制"谁能进来"。
+ *
+ *   BW_ACCOUNTS_JSON 支持两种格式：
+ *     数组：["a@b.com", "c@d.com"]
+ *     对象：{"a@b.com": "任意值", ...}（只看 key 是否存在）
  */
 
 const SESSION_COOKIE  = 'bw_session';
-const SESSION_TTL     = 60 * 60 * 24 * 7;
+const SESSION_TTL     = 60 * 60 * 12;   // 12h，与 WM JWT 同步
 const WM_API          = 'https://api.warframe.market';
 const WM_DEVICE_ID    = '987d81b2-8a2c-425b-ae0e-cfba824548da';
-const WM_SLUG         = 'csc-2026';
-const WM_JWT_KV_KEY   = 'wm_jwt';
 const WM_JWT_TTL      = 60 * 60 * 12;
 const WM_ITEMS_KV_KEY = 'wm_items_cache';
 const WM_ITEMS_TTL    = 60 * 60;
-const WM_PRICE_TTL    = 60 * 5;   // 均价缓存 5 分钟
+const WM_PRICE_TTL    = 60 * 5;
 
 /* ══ 通用工具 ═══════════════════════════════════════════════ */
 function jsonResponse(obj, status) {
@@ -23,11 +25,6 @@ function jsonResponse(obj, status) {
     status: status || 200,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-async function sha256Hex(text) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function randomToken() {
@@ -50,32 +47,79 @@ function sessionCookieHeader(token, maxAge) {
   return SESSION_COOKIE + '=' + token + '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=' + maxAge;
 }
 
-/* ══ 我方站点：白名单登录系统 ══════════════════════════════ */
+/* 检查邮箱是否在白名单内
+ * BW_ACCOUNTS_JSON 支持数组 ["a@b.com"] 或对象 {"a@b.com": "任意值"} */
+function isWhitelisted(email, env) {
+  try {
+    const raw = JSON.parse(env.BW_ACCOUNTS_JSON || '[]');
+    if (Array.isArray(raw)) return raw.map(e => String(e).trim().toLowerCase()).includes(email);
+    return Object.keys(raw).some(k => k.trim().toLowerCase() === email);
+  } catch { return false; }
+}
+
+/* ══ WM signin：用用户自己的凭据换取 WM JWT ══════════════ */
+async function wmSigninWithCredentials(email, password) {
+  const pageResp = await fetch('https://warframe.market/auth/signin', {
+    headers: {
+      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+  });
+  const html = await pageResp.text();
+  const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
+                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
+  const csrfToken = metaMatch ? metaMatch[1] : null;
+  if (!csrfToken) throw new Error('无法获取 CSRF token，请稍后重试');
+
+  const rawSetCookie = pageResp.headers.get('Set-Cookie') || '';
+  const preJwtMatch  = rawSetCookie.match(/JWT=([^;,\s]+)/);
+  const postHeaders  = {
+    'Content-Type': 'application/json',
+    'Accept':       'application/json',
+    'Origin':       'https://warframe.market',
+    'Referer':      'https://warframe.market/auth/signin',
+    'Platform':     'pc',
+    'Language':     'en',
+    'User-Agent':   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+    'x-csrftoken':  csrfToken,
+  };
+  if (preJwtMatch) postHeaders['Cookie'] = 'JWT=' + preJwtMatch[1];
+
+  const resp = await fetch(`${WM_API}/v1/auth/signin`, {
+    method: 'POST', headers: postHeaders,
+    body: JSON.stringify({ email, password, device_id: WM_DEVICE_ID }),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error(resp.status === 401 ? 'WM 邮箱或密码错误' : `WM 登录失败(${resp.status})`);
+  }
+  const postCookie = resp.headers.get('Set-Cookie') || '';
+  const jwtMatch   = postCookie.match(/JWT=([^;,\s]+)/);
+  if (!jwtMatch) throw new Error('WM 未返回 JWT，请重试');
+  return jwtMatch[1];
+}
+
+/* ══ 白名单登录：用 WM 账号验证身份 ═════════════════════ */
 async function handleLogin(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonResponse({ error: '请求格式错误' }, 400); }
 
   const email    = String((body && body.email)    || '').trim().toLowerCase();
   const password = String((body && body.password) || '');
-  if (!email || !password) return jsonResponse({ error: '请输入邮箱和口令' }, 400);
+  if (!email || !password) return jsonResponse({ error: '请输入邮箱和密码' }, 400);
 
-  let accounts = {};
-  try { accounts = JSON.parse(env.BW_ACCOUNTS_JSON || '{}'); } catch {}
+  if (!isWhitelisted(email, env)) return jsonResponse({ error: '该账号不在白名单内' }, 401);
 
-  let expectedHash = null;
-  Object.keys(accounts).forEach((k) => {
-    if (k.trim().toLowerCase() === email) expectedHash = accounts[k];
-  });
-  if (!expectedHash) return jsonResponse({ error: '账号或口令不正确' }, 401);
-
-  const hash = await sha256Hex(password);
-  if (hash !== expectedHash) return jsonResponse({ error: '账号或口令不正确' }, 401);
+  let wmJwt;
+  try { wmJwt = await wmSigninWithCredentials(email, password); }
+  catch(e) { return jsonResponse({ error: e.message }, 401); }
 
   const token = randomToken();
-  /* 用 token 本身作 KV key，避免单 key 的最终一致性问题，同时支持多设备同时登录 */
-  await env.BW_SESSIONS.put('sess_' + token, JSON.stringify({ email, loginAt: Date.now() }), {
-    expirationTtl: SESSION_TTL,
-  });
+  await Promise.all([
+    env.BW_SESSIONS.put('sess_' + token,   JSON.stringify({ email, loginAt: Date.now() }), { expirationTtl: SESSION_TTL }),
+    env.BW_SESSIONS.put('wm_jwt_' + token, wmJwt, { expirationTtl: WM_JWT_TTL }),
+  ]);
 
   const resp = jsonResponse({ ok: true, email });
   resp.headers.set('Set-Cookie', sessionCookieHeader(token, SESSION_TTL));
@@ -85,125 +129,65 @@ async function handleLogin(request, env) {
 async function handleLogout(request, env) {
   const cookies = parseCookies(request);
   const token   = cookies[SESSION_COOKIE];
-  if (token) await env.BW_SESSIONS.delete('sess_' + token);
+  if (token) {
+    await Promise.all([
+      env.BW_SESSIONS.delete('sess_' + token),
+      env.BW_SESSIONS.delete('wm_jwt_' + token),
+    ]);
+  }
   const resp = jsonResponse({ ok: true });
   resp.headers.set('Set-Cookie', sessionCookieHeader('', 0));
   return resp;
 }
 
-async function getSessionEmail(request, env) {
+/* 返回 { email, token } 或 null */
+async function getSession(request, env) {
   const cookies = parseCookies(request);
   const token   = cookies[SESSION_COOKIE];
   if (!token) return null;
   const raw = await env.BW_SESSIONS.get('sess_' + token);
   if (!raw) return null;
-  let rec;
-  try { rec = JSON.parse(raw); } catch { return null; }
-  return rec ? rec.email : null;
+  try { const rec = JSON.parse(raw); return rec ? { email: rec.email, token } : null; }
+  catch { return null; }
 }
 
 async function handleMe(request, env) {
-  const email = await getSessionEmail(request, env);
-  if (!email) return jsonResponse({ ok: false, error: '未登录' }, 401);
+  const sess = await getSession(request, env);
+  if (!sess) return jsonResponse({ ok: false, error: '未登录' }, 401);
   try {
-    const resp = await wmFetch(env, '/v2/profile', {});
-    if (resp.ok) {
-      const j       = await resp.json();
-      const profile = j.data || j;
-      const slug    = profile.slug || profile.ingame_name || WM_SLUG;
-      const status  = profile.status || 'offline';
-      /* avatar 字段格式：如 "user/avatars/default.png"，拼完整 WM 静态路径 */
-      const avatarPath = profile.avatar || null;
-      const avatar  = avatarPath
-        ? '/api/wm/avatar?path=' + encodeURIComponent(avatarPath)
-        : null;
-      return jsonResponse({ ok: true, session: { slug, status, email, avatar } });
+    const wmJwt = await env.BW_SESSIONS.get('wm_jwt_' + sess.token);
+    if (wmJwt) {
+      const resp = await wmFetch(wmJwt, '/v2/profile', {});
+      if (resp.ok) {
+        const j       = await resp.json();
+        const profile = j.data || j;
+        const slug    = profile.slug || profile.ingame_name || sess.email.split('@')[0];
+        const status  = profile.status || 'offline';
+        const avatarPath = profile.avatar || null;
+        const avatar  = avatarPath ? '/api/wm/avatar?path=' + encodeURIComponent(avatarPath) : null;
+        return jsonResponse({ ok: true, session: { slug, status, email: sess.email, avatar } });
+      }
     }
   } catch {}
-  return jsonResponse({ ok: true, session: { slug: WM_SLUG, status: 'offline', email, avatar: null } });
+  return jsonResponse({ ok: true, session: { slug: sess.email.split('@')[0], status: 'offline', email: sess.email, avatar: null } });
 }
 
-/* ══ WM 后端代理：JWT 管理 ════════════════════════════════ */
-function extractCookieValue(setCookieHeader, name) {
-  if (!setCookieHeader) return null;
-  const re = new RegExp('(?:^|,\\s*)' + name + '=([^;,]+)');
-  const m  = re.exec(setCookieHeader);
-  return m ? m[1] : null;
-}
-
-async function wmSignin(env) {
-  const pageResp = await fetch('https://warframe.market/auth/signin', {
-    headers: {
-      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-  });
-  const html = await pageResp.text();
-
-  const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
-                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
-  const csrfToken = metaMatch ? metaMatch[1] : null;
-  if (!csrfToken) throw new Error('WM signin: csrf-token meta not found');
-
-  const rawSetCookie = pageResp.headers.get('Set-Cookie') || '';
-  const jwtMatch = rawSetCookie.match(/JWT=([^;,\s]+)/);
-  const preJwt = jwtMatch ? jwtMatch[1] : null;
-
-  const postHeaders = {
-    'Content-Type':    'application/json',
-    'Accept':          'application/json',
-    'Origin':          'https://warframe.market',
-    'Referer':         'https://warframe.market/auth/signin',
-    'Platform':        'pc',
-    'Language':        'en',
-    'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'x-csrftoken':     csrfToken,
-  };
-  if (preJwt) postHeaders['Cookie'] = 'JWT=' + preJwt;
-
-  const resp = await fetch(`${WM_API}/v1/auth/signin`, {
-    method: 'POST', headers: postHeaders,
-    body: JSON.stringify({ email: env.WM_EMAIL, password: env.WM_PASSWORD, device_id: WM_DEVICE_ID }),
-  });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`WM signin failed: ${resp.status} — ${errText.slice(0, 300)}`);
-  }
-
-  const postSetCookie = resp.headers.get('Set-Cookie') || '';
-  const jwtResult     = postSetCookie.match(/JWT=([^;,\s]+)/);
-  const jwt           = jwtResult ? jwtResult[1] : null;
-  if (!jwt) throw new Error(`WM signin: JWT not in POST Set-Cookie`);
-
-  await env.BW_SESSIONS.put(WM_JWT_KV_KEY, jwt, { expirationTtl: WM_JWT_TTL });
-  return jwt;
-}
-
-async function getWmJwt(env) {
-  const cached = await env.BW_SESSIONS.get(WM_JWT_KV_KEY);
-  if (cached) return cached;
-  return wmSignin(env);
-}
-
-async function wmFetch(env, path, options) {
-  const jwt  = await getWmJwt(env);
+/* ══ WM API fetch：直接接受 JWT，不再共享 ════════════════ */
+async function wmFetch(wmJwt, path, options) {
   const opts = Object.assign({ method: 'GET' }, options || {});
   opts.headers = Object.assign({
-    'Cookie':   'JWT=' + jwt,
+    'Cookie':   'JWT=' + wmJwt,
     'Platform': 'pc',
     'Language': 'en',
   }, opts.headers || {});
+  return fetch(WM_API + path, opts);
+}
 
-  let resp = await fetch(WM_API + path, opts);
-
-  if (resp.status === 401) {
-    await env.BW_SESSIONS.delete(WM_JWT_KV_KEY);
-    const newJwt = await wmSignin(env);
-    opts.headers['Cookie'] = 'JWT=' + newJwt;
-    resp = await fetch(WM_API + path, opts);
-  }
-  return resp;
+/* 从 request 中取出当前用户的 WM JWT；失败则返回 null */
+async function getWmJwt(request, env) {
+  const sess = await getSession(request, env);
+  if (!sess) return null;
+  return env.BW_SESSIONS.get('wm_jwt_' + sess.token);
 }
 
 function wmJsonProxy(resp, text) {
@@ -266,10 +250,11 @@ async function getItemsData(env) {
 
 // GET /api/wm/orders —— 我方全部订单（含隐藏），使用 /v2/orders/my
 async function handleWmOrders(request, env) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  const wmJwt = await getWmJwt(request, env);
+  if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const [authResp, itemsList] = await Promise.all([
-      wmFetch(env, '/v2/orders/my', {}),
+      wmFetch(wmJwt, '/v2/orders/my', {}),
       getItemsData(env),
     ]);
 
@@ -300,7 +285,7 @@ async function handleWmOrders(request, env) {
 
 // GET /api/wm/items
 async function handleWmItems(request, env) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const items = await getItemsData(env);
     return jsonResponse({ data: items || [] });
@@ -311,7 +296,7 @@ async function handleWmItems(request, env) {
 
 // POST /api/wm/refresh-items —— 手动触发物品缓存刷新
 async function handleWmRefreshItems(request, env) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
     await env.BW_SESSIONS.delete(WM_ITEMS_KV_KEY);
     const items = await refreshItemsCache(env);
@@ -323,10 +308,11 @@ async function handleWmRefreshItems(request, env) {
 
 // POST /api/wm/orders —— 创建订单
 async function handleWmOrderCreate(request, env) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  const wmJwt = await getWmJwt(request, env);
+  if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const body = await request.text();
-    const resp = await wmFetch(env, '/v2/order', {
+    const resp = await wmFetch(wmJwt, '/v2/order', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
     });
     return wmJsonProxy(resp, await resp.text());
@@ -337,10 +323,11 @@ async function handleWmOrderCreate(request, env) {
 
 // PATCH /api/wm/orders/:id
 async function handleWmOrderPatch(request, env, orderId) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  const wmJwt = await getWmJwt(request, env);
+  if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const body = await request.text();
-    const resp = await wmFetch(env, `/v2/orders/${orderId}`, {
+    const resp = await wmFetch(wmJwt, `/v2/orders/${orderId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body,
     });
     return wmJsonProxy(resp, await resp.text());
@@ -351,9 +338,10 @@ async function handleWmOrderPatch(request, env, orderId) {
 
 // DELETE /api/wm/orders/:id
 async function handleWmOrderDelete(request, env, orderId) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  const wmJwt = await getWmJwt(request, env);
+  if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
   try {
-    const resp = await wmFetch(env, `/v2/orders/${orderId}`, { method: 'DELETE' });
+    const resp = await wmFetch(wmJwt, `/v2/orders/${orderId}`, { method: 'DELETE' });
     if (resp.status === 204) return new Response(null, { status: 204 });
     return wmJsonProxy(resp, await resp.text());
   } catch (e) {
@@ -361,11 +349,9 @@ async function handleWmOrderDelete(request, env, orderId) {
   }
 }
 
-// GET /api/wm/price/:slug —— 计算物品"均价"
-// 规则：筛选在线ingame且出售中订单，去掉最高5个+最低3个，取均值
-// 使用 WM v1 公开端点（无需 JWT，更稳定）
+// GET /api/wm/price/:slug —— 计算物品"均价"（WM v1 公开端点，无需 JWT）
 async function handleWmPrice(request, env, slug) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
   const cacheKey = 'avg_price_' + slug;
   const cached = await env.BW_SESSIONS.get(cacheKey);
@@ -391,8 +377,7 @@ async function handleWmPrice(request, env, slug) {
       .filter(function(o) {
         const type   = o.order_type || o.orderType || '';
         const status = (o.user && (o.user.status || o.user.ingame_status)) || '';
-        /* 包含 ingame + online，只排除 offline，让均价在无人在线时也能计算 */
-        return type === 'sell' && status !== 'offline' && o.visible !== false;
+        return type === 'sell' && status === 'ingame' && o.visible !== false;
       })
       .map(function(o) { return o.platinum; })
       .sort(function(a, b) { return a - b; });
@@ -422,7 +407,7 @@ async function handleWmPrice(request, env, slug) {
 
 // GET /api/wm/stats/:slug —— 物品交易统计（近90天均价趋势 + 成交量）
 async function handleWmStats(request, env, slug) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
   const cacheKey = 'stats_' + slug;
   const cached   = await env.BW_SESSIONS.get(cacheKey);
@@ -463,7 +448,7 @@ async function handleWmStats(request, env, slug) {
 
 // GET /api/wm/item/:slug —— 物品详情
 async function handleWmItemDetail(request, env, slug) {
-  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
   const cacheKey = 'item_detail_' + slug;
   const cached = await env.BW_SESSIONS.get(cacheKey);
