@@ -329,12 +329,23 @@ export default {
             'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
         });
-        const allHeaders = {};
-        r.headers.forEach((v, k) => { allHeaders[k] = v; });
+        const allHeaders = [];
+        for (const [k, v] of r.headers.entries()) {
+          allHeaders.push([k, v]);
+        }
+        const setCookieRaw = r.headers.get('set-cookie') || '';
         const html = await r.text();
         const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
-        return jsonResponse({ status: r.status, headers: allHeaders, csrfToken: metaMatch ? metaMatch[1] : null });
+        // base64 编码 Set-Cookie 原始值，避免特殊字符问题
+        const enc = [...setCookieRaw].map(c => c.charCodeAt(0));
+        return jsonResponse({
+          status: r.status,
+          setCookieLen: setCookieRaw.length,
+          setCookieChars: enc.slice(0, 200),
+          csrfToken: metaMatch ? metaMatch[1].slice(0, 30) + '…' : null,
+          allHeaderNames: allHeaders.map(([k]) => k),
+        });
       } catch (e) {
         return jsonResponse({ error: e.message }, 500);
       }
