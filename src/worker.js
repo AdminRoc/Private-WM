@@ -127,6 +127,8 @@ async function wmSignin(env) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Origin':       'https://warframe.market',
+      'Referer':      'https://warframe.market/auth/signin',
       'Platform':     'pc',
       'Language':     'en',
     },
@@ -136,7 +138,10 @@ async function wmSignin(env) {
       device_id: WM_DEVICE_ID,
     }),
   });
-  if (!resp.ok) throw new Error(`WM signin failed: ${resp.status}`);
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`WM signin failed: ${resp.status} — ${errText.slice(0, 300)}`);
+  }
 
   // WM 在 Set-Cookie 里返回 JWT，响应体里没有 token 字段
   const setCookie = resp.headers.get('Set-Cookie') || '';
