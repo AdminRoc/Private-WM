@@ -192,11 +192,8 @@ function renderProfile(sess) {
   const status    = sess.status || 'offline';
   const dotCls    = status === 'ingame' ? 'ingame' : status === 'online' ? 'online' : 'offline';
   const statusTxt = { ingame: '游戏中', online: '在线', offline: '离线' }[status] || status;
-  /* 优先用 session 里从 /v2/profile 拿到的 avatar 路径（已含 /api/wm/avatar?path=...） */
-  const avatarSrc = sess.avatar || ('/api/wm/avatar?slug=' + encodeURIComponent(slug));
   card.innerHTML = `
-<img class="bw-avatar" id="bw-avatar-img" src="${avatarSrc}" alt="avatar"
-     onerror="this.src=this.src.includes('csc-logo.png')?'picture/avatar-csc-2026.svg':'picture/csc-logo.png'">
+<img class="bw-avatar" id="bw-avatar-img" src="/picture/csc-logo.png" alt="avatar">
 <div class="bw-profile-info">
   <div class="bw-ign">${slug}</div>
   <div class="bw-meta">

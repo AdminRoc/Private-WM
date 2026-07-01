@@ -118,13 +118,24 @@ async function handleLogin(request, env) {
   try { wmJwt = await wmSigninWithCredentials(email, password); }
   catch(e) { return jsonResponse({ error: e.message }, 401); }
 
+  // 登录成功后立即取 WM 用户名，存入 session
+  let ingame_name = email.split('@')[0];
+  try {
+    const pr = await wmFetch(wmJwt, '/v1/profile', {});
+    if (pr.ok) {
+      const pj = await pr.json();
+      const profile = (pj.payload && pj.payload.profile) || pj.data || pj;
+      ingame_name = profile.ingame_name || profile.name || ingame_name;
+    }
+  } catch {}
+
   const token = randomToken();
   await Promise.all([
-    env.BW_SESSIONS.put('sess_' + token,   JSON.stringify({ email, loginAt: Date.now() }), { expirationTtl: SESSION_TTL }),
+    env.BW_SESSIONS.put('sess_' + token, JSON.stringify({ email, ingame_name, loginAt: Date.now() }), { expirationTtl: SESSION_TTL }),
     env.BW_SESSIONS.put('wm_jwt_' + token, wmJwt, { expirationTtl: WM_JWT_TTL }),
   ]);
 
-  const resp = jsonResponse({ ok: true, email });
+  const resp = jsonResponse({ ok: true, email, ingame_name });
   resp.headers.set('Set-Cookie', sessionCookieHeader(token, SESSION_TTL));
   return resp;
 }
@@ -150,29 +161,16 @@ async function getSession(request, env) {
   if (!token) return null;
   const raw = await env.BW_SESSIONS.get('sess_' + token);
   if (!raw) return null;
-  try { const rec = JSON.parse(raw); return rec ? { email: rec.email, token } : null; }
+  try { const rec = JSON.parse(raw); return rec ? { email: rec.email, ingame_name: rec.ingame_name, token } : null; }
   catch { return null; }
 }
 
 async function handleMe(request, env) {
   const sess = await getSession(request, env);
   if (!sess) return jsonResponse({ ok: false, error: '未登录' }, 401);
-  try {
-    const wmJwt = await env.BW_SESSIONS.get('wm_jwt_' + sess.token);
-    if (wmJwt) {
-      const resp = await wmFetch(wmJwt, '/v2/profile', {});
-      if (resp.ok) {
-        const j       = await resp.json();
-        const profile = j.data || j;
-        const slug    = profile.slug || profile.ingame_name || sess.email.split('@')[0];
-        const status  = profile.status || 'offline';
-        const avatarPath = profile.avatar || null;
-        const avatar  = avatarPath ? '/api/wm/avatar?path=' + encodeURIComponent(avatarPath) : null;
-        return jsonResponse({ ok: true, session: { slug, status, email: sess.email, avatar } });
-      }
-    }
-  } catch {}
-  return jsonResponse({ ok: true, session: { slug: sess.email.split('@')[0], status: 'offline', email: sess.email, avatar: null } });
+  // ingame_name 已在登录时存入 session，直接用，无需再请求 WM
+  const slug = sess.ingame_name || sess.email.split('@')[0];
+  return jsonResponse({ ok: true, session: { slug, status: 'online', email: sess.email, avatar: null } });
 }
 
 /* ══ WM API fetch：直接接受 JWT，不再共享 ════════════════ */
@@ -516,22 +514,60 @@ async function handleThumbProxy(request) {
   return new Response(r.body, { status: r.status, headers });
 }
 
-async function handleAvatarProxy(request) {
-  const url  = new URL(request.url);
-  /* 优先接受 path 参数（来自 /v2/profile avatar 字段），兼容旧 slug 参数 */
-  const path = url.searchParams.get('path');
-  const slug = url.searchParams.get('slug');
-  if (!path && !slug) return new Response('missing path/slug', { status: 400 });
-  const upstream = path
-    ? 'https://warframe.market/static/assets/' + path.replace(/^\/+/, '')
-    : 'https://warframe.market/static/assets/user/avatars/' + slug + '.png';
-  const r = await fetch(upstream, { headers: { 'Referer': 'https://warframe.market/' } });
-  if (!r.ok) return new Response('not found', { status: 404 });
-  const headers = new Headers();
-  const ct = r.headers.get('content-type');
-  if (ct) headers.set('content-type', ct);
-  headers.set('cache-control', 'public, max-age=3600');
-  return new Response(r.body, { status: r.status, headers });
+async function handleAvatarProxy(request, env) {
+  // 直接返回本地 CSC logo，不再尝试从 WM 获取头像
+  return env.ASSETS.fetch(new Request(new URL('/picture/csc-logo.png', request.url)));
+}
+
+/* ══ 定时任务：预计算全量物品均价 ══════════════════════════════
+   每天凌晨3点/9点/15点/21点（UTC）触发，逐个 GET orders 并写 KV。
+   TTL = 7h（覆盖到下次计算），避免前端等待。
+═══════════════════════════════════════════════════════════════ */
+async function computeAllPrices(env) {
+  const itemsRaw = await env.BW_SESSIONS.get(WM_ITEMS_KV_KEY);
+  if (!itemsRaw) return;
+  let items;
+  try { items = JSON.parse(itemsRaw); } catch { return; }
+
+  const slugs = items.map(function(i) { return i.url_name || i.slug; }).filter(Boolean);
+
+  for (var i = 0; i < slugs.length; i++) {
+    const slug = slugs[i];
+    try {
+      const resp = await wmPublicFetch('/v1/items/' + slug + '/orders', env);
+      if (!resp.ok) { await new Promise(function(r) { setTimeout(r, 600); }); continue; }
+      const json = await resp.json();
+      const allOrders = (json.payload && json.payload.orders) || json.data || [];
+
+      const prices = allOrders
+        .filter(function(o) {
+          const type   = (o.order_type || '').toLowerCase();
+          const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
+          return type === 'sell' && status === 'ingame' && o.visible !== false;
+        })
+        .map(function(o) { return Number(o.platinum); })
+        .filter(function(p) { return p > 0; })
+        .sort(function(a, b) { return a - b; });
+
+      const count = prices.length;
+      let avg = null, special = false, lo = 0, hi = 0, used = 0;
+      if (count >= 20)      { lo = 3; hi = 5; }
+      else if (count >= 5)  { lo = 2; hi = 2; }
+      else if (count >= 3)  { lo = 1; hi = 1; }
+      else                  { special = true; }
+
+      if (!special) {
+        const trimmed = prices.slice(lo, count - hi);
+        used = trimmed.length;
+        if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
+      }
+
+      const result = { avg, count, used, total: allOrders.length, special: special || undefined };
+      await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: 60 * 60 * 7 });
+    } catch {}
+    // 限速：每条 420ms，约 1500 条需 10 分钟，在 Cloudflare Scheduled 30min 上限内
+    await new Promise(function(r) { setTimeout(r, 420); });
+  }
 }
 
 export default {
@@ -546,7 +582,7 @@ export default {
 
     /* 静态代理 */
     if (p === '/api/wm/thumb'  && request.method === 'GET') return handleThumbProxy(request);
-    if (p === '/api/wm/avatar' && request.method === 'GET') return handleAvatarProxy(request);
+    if (p === '/api/wm/avatar' && request.method === 'GET') return handleAvatarProxy(request, env);
 
     if (p === '/api/wm/items'         && request.method === 'GET')  return handleWmItems(request, env);
     if (p === '/api/wm/refresh-items' && request.method === 'POST') return handleWmRefreshItems(request, env);
@@ -575,6 +611,12 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    // 每小时：刷新物品总表
     ctx.waitUntil(refreshItemsCache(env));
+    // 每天 3/9/15/21 点 UTC：预计算全量均价
+    const h = new Date(event.scheduledTime).getUTCHours();
+    if (h === 3 || h === 9 || h === 15 || h === 21) {
+      ctx.waitUntil(computeAllPrices(env));
+    }
   },
 };
