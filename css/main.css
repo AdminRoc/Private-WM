@@ -114,44 +114,75 @@ input, button, select { font-family: var(--f-main); }
 
 /* ─── 顶部导航 ─── */
 .bw-nav {
-  display: flex; align-items: center; gap: .1rem;
-  flex: 1; justify-content: center;
-  padding: 0 1rem;
+  display: flex; align-items: stretch;
+  flex: 1; height: 100%; gap: 0;
+  padding: 0 1.2rem;
 }
+
 .bw-nav-link {
   position: relative;
-  display: inline-flex; align-items: center;
-  padding: .38rem .88rem;
-  color: var(--c-text2); font-size: .8rem; font-weight: 600; letter-spacing: .05em;
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
+  display: flex; align-items: center; justify-content: center;
+  flex: 1;
+  color: rgba(170,200,230,.42);
+  font-size: .74rem; font-weight: 800;
+  letter-spacing: .18em; text-transform: uppercase;
   text-decoration: none; white-space: nowrap;
-  transition: color var(--ease-fast), background var(--ease-fast), border-color var(--ease-fast);
   overflow: hidden;
+  transition: color .3s ease;
+  border-left: 1px solid rgba(185,142,52,.08);
 }
+.bw-nav-link:last-child { border-right: 1px solid rgba(185,142,52,.08); }
+
+/* 底部点亮线 */
 .bw-nav-link::before {
   content: '';
-  position: absolute; bottom: 0; left: 50%; right: 50%;
-  height: 1.5px;
-  background: var(--c-gold-bright);
+  position: absolute; bottom: 0; left: 50%; right: 50%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--c-gold-bright), transparent);
+  box-shadow: 0 0 12px 2px rgba(212,168,74,.55);
   border-radius: 99px;
-  transition: left .22s cubic-bezier(.22,.68,0,1.2), right .22s cubic-bezier(.22,.68,0,1.2), opacity .2s ease;
+  transition: left .32s cubic-bezier(.22,.68,0,1.2),
+              right .32s cubic-bezier(.22,.68,0,1.2),
+              opacity .25s ease;
   opacity: 0;
 }
+
+/* 悬停背景渐变填充（从底部向上）*/
 .bw-nav-link::after {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(212,168,74,.06) 50%, transparent 100%);
-  transform: translateX(-100%);
-  transition: transform .4s ease;
+  background: linear-gradient(180deg,
+    rgba(212,168,74,0)   0%,
+    rgba(212,168,74,.04) 40%,
+    rgba(212,168,74,.11) 100%);
+  opacity: 0;
+  transition: opacity .3s ease;
 }
+
 .bw-nav-link:hover {
   color: var(--c-gold-bright);
-  background: rgba(212,168,74,.07);
-  border-color: rgba(212,168,74,.18);
+  text-shadow: 0 0 18px rgba(212,168,74,.55);
 }
-.bw-nav-link:hover::before { left: 12%; right: 12%; opacity: 1; }
-.bw-nav-link:hover::after  { transform: translateX(100%); }
+.bw-nav-link:hover::before {
+  left: 8%; right: 8%; opacity: 1;
+}
+.bw-nav-link:hover::after { opacity: 1; }
+
+/* 文字本身的光晕层 */
+.bw-nav-link span {
+  position: relative; z-index: 1;
+}
+
+/* 悬停时顶部反光条 */
+.bw-nav-link:hover .bw-nav-shine {
+  opacity: 1;
+}
+.bw-nav-shine {
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,168,74,.35), transparent);
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
 
 /* 登出按钮 */
 .bw-logout-btn {
