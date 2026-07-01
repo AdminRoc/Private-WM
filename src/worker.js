@@ -249,22 +249,25 @@ async function handleWmOrders(request, env) {
   try {
     const [authResp, itemsResp] = await Promise.all([
       wmFetch(env, `/v2/orders/user/${WM_SLUG}`, {}),
-      fetch(`${WM_API}/v1/items`, { headers: { 'Platform': 'pc', 'Language': 'en' } }),
+      fetch(`${WM_API}/v2/items`, { headers: { 'Platform': 'pc', 'Language': 'en' } }),
     ]);
 
     const authJson  = authResp.ok  ? await authResp.json()  : { data: [] };
     const itemsJson = itemsResp.ok ? await itemsResp.json() : {};
 
-    // v1/items 返回格式：{payload: {items: [{id, item_name, url_name, ...}]}}
+    // v2/items 返回格式：{data: [{id, slug, i18n: {"zh-hans": {name}, "en": {name}}}]}
     const itemMap = {};
-    const itemsList = (itemsJson.payload && itemsJson.payload.items) || [];
+    const itemsList = itemsJson.data || [];
     itemsList.forEach(function (it) {
-      if (it.id) itemMap[it.id] = it.item_name || it.url_name || it.id;
+      if (!it.id) return;
+      const zhName = it.i18n && it.i18n['zh-hans'] && it.i18n['zh-hans'].name;
+      const enName = it.i18n && it.i18n['en']      && it.i18n['en'].name;
+      itemMap[it.id] = { zh: zhName || enName || it.slug, en: enName || it.slug };
     });
 
     const merged = (authJson.data || []).map(function (o) {
-      const name = itemMap[o.itemId];
-      return name ? Object.assign({}, o, { item: { en: name } }) : o;
+      const names = itemMap[o.itemId];
+      return names ? Object.assign({}, o, { item: names }) : o;
     });
 
     return jsonResponse({ data: merged });

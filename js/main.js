@@ -77,7 +77,7 @@
   var _ordersCache = [];   // 当前全量订单，供操作后局部刷新用
 
   function orderRow(o) {
-    var item    = (o.item && (o.item.en || o.item.zh || o.item.en_name || o.item.slug)) || o.itemId || '—';
+    var item    = (o.item && (o.item.zh || o.item.en || o.item.slug)) || o.itemId || '—';
     var qty     = o.quantity ? '×' + o.quantity : '';
     var hidden  = o.visible === false;
     var visIcon = hidden ? '👁' : '👁';
