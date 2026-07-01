@@ -512,7 +512,10 @@ function openCreate() {
   document.getElementById('bw-create-vis-on').classList.add('active');
   document.getElementById('bw-create-vis-off').classList.remove('active');
   document.getElementById('bw-item-dropdown').innerHTML = '';
-  ['bw-create-rank-wrap','bw-create-per-trade-wrap','bw-create-subtype-wrap'].forEach(function(id) { document.getElementById(id).style.display='none'; });
+  ['bw-create-rank-wrap','bw-create-per-trade-wrap','bw-create-subtype-wrap',
+   'bw-create-rerolls-wrap','bw-create-mastery-wrap','bw-create-lichname-wrap',
+   'bw-create-element-wrap','bw-create-ephemera-wrap','bw-create-quirk-wrap'
+  ].forEach(function(id) { document.getElementById(id).style.display='none'; });
   const msg = document.getElementById('bw-create-msg'); if (msg) msg.textContent = '';
   openDrawer('bw-create-drawer', 'bw-create-overlay');
   document.getElementById('bw-create-item-q').focus();
