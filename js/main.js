@@ -856,21 +856,31 @@ async function batchOp(orders, patchFn) {
   const prog = document.getElementById('bw-batch-progress');
   const txt  = document.getElementById('bw-batch-prog-text');
   prog.style.display = '';
-  let done = 0;
+  let done = 0, failed = 0, lastErr = '';
   for (const o of orders) {
     const patch = patchFn(o);
     if (patch) {
       try {
-        await apiFetch('/order/' + o.id, { method: 'PATCH', body: JSON.stringify(patch) });
+        await apiFetch('/orders/' + o.id, { method: 'PATCH', body: JSON.stringify(patch) });
         Object.assign(o, patch);
-      } catch {}
+      } catch(e) {
+        failed++;
+        lastErr = e.message ? e.message.slice(0, 60) : String(e);
+      }
     }
     done++;
     bar.style.width = Math.round(done/orders.length*100) + '%';
-    txt.textContent = done + ' / ' + orders.length;
+    txt.textContent = done + ' / ' + orders.length + (failed ? '  ✗' + failed : '');
     await sleep(410);
   }
   prog.style.display = 'none'; bar.style.width = '0%';
+  if (failed) txt.style.display = '';
+  else txt.style.display = 'none';
+  if (failed) {
+    txt.textContent = '✗ ' + failed + ' 条失败：' + lastErr;
+    txt.style.color = '#e05c5c';
+    setTimeout(function() { txt.style.display = 'none'; txt.style.color = ''; }, 6000);
+  }
   render();
 }
 

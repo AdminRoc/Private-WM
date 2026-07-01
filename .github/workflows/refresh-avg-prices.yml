@@ -1,0 +1,58 @@
+name: 刷新全量均价数据
+
+# 每 12 小时从 WM v2 API 重新拉取全量均价，覆盖 data/avg_prices_full.json。
+# Worker 部署时会将此文件打包进 ASSETS，作为均价静态数据源。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 2,14 * * *'   # 每日 02:30 / 14:30 UTC
+
+concurrency:
+  group: refresh-avg-prices
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: 拉取私库(脚本)
+        uses: actions/checkout@v5
+        with:
+          repository: AdminRoc/Ws-Web-core
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          path: _private
+
+      - name: 复制脚本
+        run: |
+          mkdir -p .github/scripts
+          cp _private/.github/scripts/fetch_avg_prices.py .github/scripts/
+          rm -rf _private
+
+      - name: 安装依赖
+        run: pip install aiohttp -q
+
+      - name: 拉取均价数据
+        run: python3 .github/scripts/fetch_avg_prices.py
+        env:
+          AVG_PRICES_OUT: data/avg_prices_full.json
+
+      - name: 提交并推送
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/avg_prices_full.json
+          git diff --staged --quiet && { echo "无变动，跳过"; exit 0; }
+          git commit -m "data: refresh avg_prices_full.json [skip ci]"
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase --autostash origin main || true
+          done
+          exit 1

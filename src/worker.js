@@ -352,7 +352,7 @@ async function handleWmOrderPatch(request, env, orderId) {
   if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const body = await request.text();
-    const resp = await wmFetch(wmJwt, `/v2/orders/${orderId}`, {
+    const resp = await wmFetch(wmJwt, '/v2/order/' + orderId, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body,
     });
     return wmJsonProxy(resp, await resp.text());
@@ -366,7 +366,7 @@ async function handleWmOrderDelete(request, env, orderId) {
   const wmJwt = await getWmJwt(request, env);
   if (!wmJwt) return jsonResponse({ error: '请先登录' }, 401);
   try {
-    const resp = await wmFetch(wmJwt, `/v2/orders/${orderId}`, { method: 'DELETE' });
+    const resp = await wmFetch(wmJwt, '/v2/order/' + orderId, { method: 'DELETE' });
     if (resp.status === 204) return new Response(null, { status: 204 });
     return wmJsonProxy(resp, await resp.text());
   } catch (e) {
@@ -397,61 +397,64 @@ async function wmPublicFetch(path, env) {
   return fetch(WM_API + path, { headers: WM_PUBLIC_HEADERS });
 }
 
-// GET /api/wm/price/:slug —— 计算物品均价（ingame 卖家，去极值取均值）
+/* 静态均价文件缓存（Worker 实例内存，避免每次请求重读 247KB） */
+let _avgBulkCache = null;
+async function getAvgBulk(env) {
+  if (_avgBulkCache) return _avgBulkCache;
+  try {
+    const resp = await env.ASSETS.fetch(new Request('https://dummy/data/avg_prices_full.json'));
+    if (resp.ok) { _avgBulkCache = await resp.json(); return _avgBulkCache; }
+  } catch {}
+  return {};
+}
+
+/* 均价计算通用函数（v2 订单字段：type/user.status/visible/platinum） */
+function calcAvg(allOrders) {
+  const total = allOrders.length;
+  const prices = allOrders
+    .filter(function(o) {
+      const type   = (o.type || o.order_type || o.orderType || '').toLowerCase();
+      const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
+      return type === 'sell' && status === 'ingame' && o.visible !== false;
+    })
+    .map(function(o) { return Number(o.platinum); })
+    .filter(function(p) { return p > 0; })
+    .sort(function(a, b) { return a - b; });
+  const count = prices.length;
+  let avg = null, special = false, lo = 0, hi = 0, used = 0;
+  if      (count >= 20) { lo = 3; hi = 5; }
+  else if (count >= 5)  { lo = 2; hi = 2; }
+  else if (count >= 3)  { lo = 1; hi = 1; }
+  else                  { special = true; }
+  if (!special) {
+    const trimmed = prices.slice(lo, hi ? count - hi : count);
+    used = trimmed.length;
+    if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
+  }
+  return { avg, count, used, total, special: special || undefined };
+}
+
+// GET /api/wm/price/:slug —— 均价查询：KV缓存 → 静态文件 → 实时拉取
 async function handleWmPrice(request, env, slug) {
   if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
+  // 1. KV 缓存（Cron 预计算写入，5min TTL）
   const cacheKey = 'avg_price_v2_' + slug;
   const cached = await env.BW_SESSIONS.get(cacheKey);
-  if (cached) {
-    try { return jsonResponse({ data: JSON.parse(cached) }); } catch {}
-  }
+  if (cached) { try { return jsonResponse({ data: JSON.parse(cached) }); } catch {} }
 
+  // 2. 静态文件回退（data/avg_prices_full.json，随部署更新）
+  const bulk = await getAvgBulk(env);
+  if (bulk[slug]) return jsonResponse({ data: bulk[slug] });
+
+  // 3. 实时拉取 v2 订单
   try {
-    const resp = await wmPublicFetch(`/v1/items/${encodeURIComponent(slug)}/orders`, env);
-    if (!resp.ok) {
-      /* 返回错误详情方便调试，不掩盖 */
-      return jsonResponse({ data: { avg: null, count: 0, used: 0, _err: resp.status } });
-    }
-
+    const resp = await wmPublicFetch('/v2/orders/item/' + encodeURIComponent(slug), env);
+    if (!resp.ok) return jsonResponse({ data: { avg: null, count: 0, used: 0, _err: resp.status } });
     const json = await resp.json();
-    const allOrders = (json.payload && (json.payload.orders || json.payload.sell_orders)) || json.data || [];
-    const total = allOrders.length;
-
-    const prices = allOrders
-      .filter(function(o) {
-        const type   = (o.order_type || o.orderType || '').toLowerCase();
-        const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
-        return type === 'sell' && status === 'ingame' && o.visible !== false;
-      })
-      .map(function(o) { return Number(o.platinum); })
-      .filter(function(p) { return p > 0; })
-      .sort(function(a, b) { return a - b; });
-
-    const count = prices.length;
-    let avg = null;
-    let special = false;
-    let lo = 0, hi = 0, used = 0;
-
-    if (count >= 20) {
-      lo = 3; hi = 5;
-    } else if (count >= 5) {
-      lo = 2; hi = 2;
-    } else if (count >= 3) {
-      lo = 1; hi = 1;
-    } else {
-      // < 3 个 ingame 卖家 → 标记为特殊，不计算均价
-      special = true;
-    }
-
-    if (!special) {
-      const trimmed = prices.slice(lo, count - hi);
-      used = trimmed.length;
-      if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
-    }
-
-    const result = { avg, count, used, total, special: special || undefined };
-    if (avg !== null) {
+    const allOrders = json.data || [];
+    const result = calcAvg(allOrders);
+    if (result.avg !== null) {
       await env.BW_SESSIONS.put(cacheKey, JSON.stringify(result), { expirationTtl: WM_PRICE_TTL });
     }
     return jsonResponse({ data: result });
@@ -617,38 +620,13 @@ async function computePricesBatch(env) {
   for (var i = 0; i < batch.length; i++) {
     const slug = batch[i];
     try {
-      const resp = await wmPublicFetch('/v1/items/' + slug + '/orders', env);
+      const resp = await wmPublicFetch('/v2/orders/item/' + slug, env);
       if (!resp.ok) { await new Promise(function(r) { setTimeout(r, 800); }); continue; }
       const json = await resp.json();
-      const allOrders = (json.payload && json.payload.orders) || json.data || [];
-
-      const prices = allOrders
-        .filter(function(o) {
-          const type   = (o.order_type || '').toLowerCase();
-          const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
-          return type === 'sell' && status === 'ingame' && o.visible !== false;
-        })
-        .map(function(o) { return Number(o.platinum); })
-        .filter(function(p) { return p > 0; })
-        .sort(function(a, b) { return a - b; });
-
-      const count = prices.length;
-      let avg = null, special = false, lo = 0, hi = 0, used = 0;
-      if (count >= 20)     { lo = 3; hi = 5; }
-      else if (count >= 5) { lo = 2; hi = 2; }
-      else if (count >= 3) { lo = 1; hi = 1; }
-      else                 { special = true; }
-
-      if (!special) {
-        const trimmed = prices.slice(lo, count - hi);
-        used = trimmed.length;
-        if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
-      }
-
-      const result = { avg, count, used, total: allOrders.length, special: special || undefined };
+      const allOrders = json.data || [];
+      const result = calcAvg(allOrders);
       await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: PRICE_KV_TTL });
     } catch {}
-    // 随机 200-400ms 间隔，约 3 req/s，实测 WM 不限速
     await new Promise(function(r) { setTimeout(r, 200 + Math.random() * 200); });
   }
 
