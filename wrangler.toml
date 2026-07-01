@@ -20,9 +20,8 @@ id = "28cb991746ea48f9bf409acaeb37d902"
 [triggers]
 crons = ["0 * * * *"]
 
-# 账号白名单+各自口令哈希、以及 WM clientId 等敏感配置全部走 Secret，
-# 不写入仓库明文。部署前需要在 Cloudflare 控制台 Variables and Secrets
-# 设置一个 JSON 类型的 Secret：
-#   BW_ACCOUNTS_JSON = { "邮箱(全小写)": "该账号口令的SHA-256哈希", ... }
-# 以后新增允许登录的账号，只需要在这一个 JSON 里加一条 key-value，
-# 不用碰任何其它配置。
+# 白名单 + 自定义显示名（明文写在这里，改完推送即可生效）
+# 格式：{"WM登录邮箱(全小写)": "页面显示的名字"}
+# 新增账号只需加一行 key-value，不需要动其他任何配置。
+[vars]
+BW_ACCOUNTS_JSON = '{"your-wm-email@example.com": "你的显示名"}'
