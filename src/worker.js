@@ -352,37 +352,58 @@ async function handleWmOrderDelete(request, env, orderId) {
   }
 }
 
-// GET /api/wm/price/:slug —— 计算物品"均价"（WM v1 公开端点，无需 JWT）
+/* WM 公开 API 请求头：模拟官方 WM 客户端行为 */
+const WM_PUBLIC_HEADERS = {
+  'Accept':          'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Platform':        'pc',
+  'Language':        'en',
+  'Origin':          'https://warframe.market',
+  'Referer':         'https://warframe.market/',
+  'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+};
+
+/* 通过 wmapi.wfspeed.run（EdgeOne 代理）调用 WM v1 公开接口
+ * 回退：若 EdgeOne 不可用则直连 api.warframe.market */
+async function wmPublicFetch(path, env) {
+  const proxy = (env && env.WM_API_PROXY) || 'https://wmapi.wfspeed.run';
+  try {
+    const r = await fetch(proxy + path, { headers: WM_PUBLIC_HEADERS });
+    if (r.ok) return r;
+  } catch {}
+  /* 直连回退 */
+  return fetch(WM_API + path, { headers: WM_PUBLIC_HEADERS });
+}
+
+// GET /api/wm/price/:slug —— 计算物品均价（ingame 卖家，去极值取均值）
 async function handleWmPrice(request, env, slug) {
   if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
-  const cacheKey = 'avg_price_' + slug;
+  const cacheKey = 'avg_price_v2_' + slug;
   const cached = await env.BW_SESSIONS.get(cacheKey);
   if (cached) {
     try { return jsonResponse({ data: JSON.parse(cached) }); } catch {}
   }
 
   try {
-    /* v1 公开接口，不需要 JWT，响应格式：{ payload: { sell_orders: [...] } } */
-    const resp = await fetch(
-      `${WM_API}/v1/items/${encodeURIComponent(slug)}/orders`,
-      { headers: { 'Platform': 'pc', 'Language': 'en', 'Accept': 'application/json' } }
-    );
-    if (!resp.ok) return jsonResponse({ data: { avg: null, count: 0, used: 0 } });
+    const resp = await wmPublicFetch(`/v1/items/${encodeURIComponent(slug)}/orders`, env);
+    if (!resp.ok) {
+      /* 返回错误详情方便调试，不掩盖 */
+      return jsonResponse({ data: { avg: null, count: 0, used: 0, _err: resp.status } });
+    }
 
     const json = await resp.json();
-    /* v1: payload.sell_orders；兼容 v2: data */
-    const allOrders = (json.payload && json.payload.sell_orders)
-                   || (json.payload && json.payload.orders)
-                   || json.data || [];
+    const allOrders = (json.payload && (json.payload.orders || json.payload.sell_orders)) || json.data || [];
+    const total = allOrders.length;
 
     const prices = allOrders
       .filter(function(o) {
-        const type   = o.order_type || o.orderType || '';
-        const status = (o.user && (o.user.status || o.user.ingame_status)) || '';
+        const type   = (o.order_type || o.orderType || '').toLowerCase();
+        const status = ((o.user && (o.user.status || o.user.ingame_status)) || '').toLowerCase();
         return type === 'sell' && status === 'ingame' && o.visible !== false;
       })
-      .map(function(o) { return o.platinum; })
+      .map(function(o) { return Number(o.platinum); })
+      .filter(function(p) { return p > 0; })
       .sort(function(a, b) { return a - b; });
 
     let avg = null;
@@ -392,19 +413,19 @@ async function handleWmPrice(request, env, slug) {
     if (count > 0) {
       const lo = Math.min(3, Math.floor(count / 5));
       const hi = Math.min(5, Math.floor(count / 4));
-      const end = count - hi > lo ? count - hi : count;
+      const end = Math.max(lo + 1, count - hi);
       const trimmed = prices.slice(lo, end);
       used = trimmed.length;
-      avg = used > 0
-        ? Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used)
-        : Math.round(prices.reduce(function(s, v) { return s + v; }, 0) / count);
+      avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
     }
 
-    const result = { avg, count, used };
-    await env.BW_SESSIONS.put(cacheKey, JSON.stringify(result), { expirationTtl: WM_PRICE_TTL });
+    const result = { avg, count, used, total };
+    if (avg !== null) {
+      await env.BW_SESSIONS.put(cacheKey, JSON.stringify(result), { expirationTtl: WM_PRICE_TTL });
+    }
     return jsonResponse({ data: result });
   } catch (e) {
-    return jsonResponse({ data: { avg: null, count: 0, used: 0 } });
+    return jsonResponse({ data: { avg: null, count: 0, used: 0, _err: e.message } });
   }
 }
 
@@ -417,11 +438,7 @@ async function handleWmStats(request, env, slug) {
   if (cached) { try { return jsonResponse({ data: JSON.parse(cached) }); } catch {} }
 
   try {
-    /* WM v1 统计接口（v2 尚无等效端点） */
-    const resp = await fetch(
-      `${WM_API}/v1/items/${encodeURIComponent(slug)}/statistics`,
-      { headers: { 'Platform': 'pc', 'Language': 'en', 'Accept': 'application/json' } }
-    );
+    const resp = await wmPublicFetch(`/v1/items/${encodeURIComponent(slug)}/statistics`, env);
     if (!resp.ok) return jsonResponse({ data: null });
     const json = await resp.json();
     const raw  = (json.payload && json.payload.statistics_closed) || [];
