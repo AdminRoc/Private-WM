@@ -340,38 +340,6 @@ export default {
       if (request.method === 'DELETE') return handleWmOrderDelete(request, env, orderMatch[1]);
     }
 
-    // ── 调试：检查 WM 登录页返回的 Cookie（排查 CSRF，上线前删除） ──
-    if (p === '/api/debug/wm-csrf' && request.method === 'GET') {
-      if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
-      try {
-        const r = await fetch('https://warframe.market/auth/signin', {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          },
-        });
-        const allHeaders = [];
-        for (const [k, v] of r.headers.entries()) {
-          allHeaders.push([k, v]);
-        }
-        const setCookieRaw = r.headers.get('set-cookie') || '';
-        const html = await r.text();
-        const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
-                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
-        // base64 编码 Set-Cookie 原始值，避免特殊字符问题
-        const enc = [...setCookieRaw].map(c => c.charCodeAt(0));
-        return jsonResponse({
-          status: r.status,
-          setCookieLen: setCookieRaw.length,
-          setCookieChars: enc.slice(0, 200),
-          csrfToken: metaMatch ? metaMatch[1].slice(0, 30) + '…' : null,
-          allHeaderNames: allHeaders.map(([k]) => k),
-        });
-      } catch (e) {
-        return jsonResponse({ error: e.message }, 500);
-      }
-    }
-
     // ── 静态资源（index.html / css / js / picture） ──
     return env.ASSETS.fetch(request);
   },
