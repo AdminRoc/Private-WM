@@ -152,17 +152,11 @@ async function wmSignin(env) {
   const csrfToken = metaMatch ? metaMatch[1] : null;
   if (!csrfToken) throw new Error('WM signin: csrf-token meta not found in page');
 
-  // 收集 Set-Cookie（Cloudflare Workers 中多个 Set-Cookie 头被合并为逗号分隔串，
-  // 但 cookie 值本身也可能含逗号，所以逐条用正则提取 name=value 部分）
+  // 从 Set-Cookie 里提取 JWT（WM 在 GET /auth/signin 时就下发匿名预认证 JWT，
+  // CSRF token 与该 JWT 标识的服务端 session 绑定，POST 必须带回此 cookie）
   const rawSetCookie = pageResp.headers.get('Set-Cookie') || '';
-  // 按 Set-Cookie 边界拆分：每条结束于下一个 ", <name>=" 或字符串末尾
-  const cookiePairs = [];
-  const cookieSegRe = /([^=,\s]+=[^;]+?)(?:;\s*(?:Path|Domain|Expires|Max-Age|SameSite|Secure|HttpOnly)[^,]*)*/gi;
-  let m;
-  while ((m = cookieSegRe.exec(rawSetCookie)) !== null) {
-    cookiePairs.push(m[1].trim());
-  }
-  const sessionCookieStr = cookiePairs.join('; ');
+  const jwtMatch = rawSetCookie.match(/JWT=([^;,\s]+)/);
+  const preJwt = jwtMatch ? jwtMatch[1] : null;
 
   // ② POST signin
   //    实际 header 名（WM 前端代码）：x-csrftoken（全小写，无连字符）
@@ -176,8 +170,8 @@ async function wmSignin(env) {
     'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'x-csrftoken':     csrfToken,
   };
-  if (sessionCookieStr) {
-    postHeaders['Cookie'] = sessionCookieStr;
+  if (preJwt) {
+    postHeaders['Cookie'] = 'JWT=' + preJwt;
   }
 
   const resp = await fetch(`${WM_API}/v1/auth/signin`, {
@@ -194,10 +188,11 @@ async function wmSignin(env) {
     throw new Error(`WM signin failed: ${resp.status} — ${errText.slice(0, 300)}`);
   }
 
-  // WM 在 Set-Cookie 里返回 JWT
-  const setCookie = resp.headers.get('Set-Cookie') || '';
-  const jwt       = extractCookieValue(setCookie, 'JWT');
-  if (!jwt) throw new Error(`WM signin: JWT cookie not found. Set-Cookie: ${setCookie.slice(0, 200)}`);
+  // WM 在 POST 响应的 Set-Cookie 里返回已认证的新 JWT
+  const postSetCookie = resp.headers.get('Set-Cookie') || '';
+  const jwtResult     = postSetCookie.match(/JWT=([^;,\s]+)/);
+  const jwt           = jwtResult ? jwtResult[1] : null;
+  if (!jwt) throw new Error(`WM signin: JWT not in POST response Set-Cookie. raw=${postSetCookie.slice(0, 200)}`);
 
   await env.BW_SESSIONS.put(WM_JWT_KV_KEY, jwt, { expirationTtl: WM_JWT_TTL });
   return jwt;
