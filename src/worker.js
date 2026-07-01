@@ -240,12 +240,36 @@ function wmJsonProxy(resp, text) {
 }
 
 // GET /api/wm/orders —— 获取全部挂单（含隐藏），仅本账号可见
+// 策略：
+//   ① 公开端点（无需认证）返回可见单，含完整物品名称
+//   ② 认证端点返回全部单（含隐藏），只有 itemId
+//   合并：用公开端点的物品名丰富隐藏单；隐藏单 item 字段留空降级为 itemId 显示
 async function handleWmOrders(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
-    // v1 profile orders 端点直接内联物品名称，v2 只返回 itemId
-    const resp = await wmFetch(env, `/v1/profile/${WM_SLUG}/orders`, {});
-    return wmJsonProxy(resp, await resp.text());
+    // 并发拉取：公开端点 + 认证端点
+    const [pubResp, authResp] = await Promise.all([
+      fetch(`${WM_API}/v2/orders/user/${WM_SLUG}`, {
+        headers: { 'Platform': 'pc', 'Language': 'en' },
+      }),
+      wmFetch(env, `/v2/orders/user/${WM_SLUG}`, {}),
+    ]);
+
+    const pubJson  = pubResp.ok  ? await pubResp.json()  : { data: [] };
+    const authJson = authResp.ok ? await authResp.json() : { data: [] };
+
+    // 建立 itemId → item 对象的映射（来自公开端点）
+    const itemMap = {};
+    (pubJson.data || []).forEach(function (o) {
+      if (o.itemId && o.item) itemMap[o.itemId] = o.item;
+    });
+
+    // 用公开端点的物品信息填充认证端点返回的订单
+    const merged = (authJson.data || []).map(function (o) {
+      return itemMap[o.itemId] ? Object.assign({}, o, { item: itemMap[o.itemId] }) : o;
+    });
+
+    return jsonResponse({ data: merged });
   } catch (e) {
     return jsonResponse({ error: 'WM API 错误：' + e.message }, 502);
   }
