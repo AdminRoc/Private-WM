@@ -183,7 +183,8 @@ function renderProfile(sess) {
   const status    = sess.status || 'offline';
   const dotCls    = status === 'ingame' ? 'ingame' : status === 'online' ? 'online' : 'offline';
   const statusTxt = { ingame: '游戏中', online: '在线', offline: '离线' }[status] || status;
-  const avatarSrc = 'https://wm.wfspeed.run/api/wm/avatar?slug=' + encodeURIComponent(slug);
+  /* 优先用 session 里从 /v2/profile 拿到的 avatar 路径（已含 /api/wm/avatar?path=...） */
+  const avatarSrc = sess.avatar || ('https://wm.wfspeed.run/api/wm/avatar?slug=' + encodeURIComponent(slug));
   card.innerHTML = `
 <img class="bw-avatar" id="bw-avatar-img" src="${avatarSrc}" alt="avatar"
      onerror="this.src=this.src.includes('csc-logo.png')?'picture/avatar-csc-2026.svg':'picture/csc-logo.png'">
@@ -557,25 +558,49 @@ function setupItemSearch() {
   });
 }
 
+function _showField(id, show) { document.getElementById(id).style.display = show ? '' : 'none'; }
+
 function updateCreateFields(item) {
-  const tags = item.tags || [];
-  const isMod = tags.includes('mod'), isRiven = tags.includes('riven');
-  const isLich = tags.includes('lich'), isSister = tags.includes('sister');
-  const rankWrap = document.getElementById('bw-create-rank-wrap');
-  const rl = document.getElementById('bw-create-rank-label');
-  if (isMod || isRiven) {
-    rankWrap.style.display = '';
-    rl.textContent = isRiven ? 'Mastery（0–16）' : '阶数（0–' + (item.max_rank||10) + '）';
-    document.getElementById('bw-create-rank').max = item.max_rank || (isRiven ? 16 : 10);
-  } else { rankWrap.style.display = 'none'; }
-  const subtypeWrap = document.getElementById('bw-create-subtype-wrap');
+  const tags     = item.tags || [];
+  const urlName  = item.url_name || item.slug || '';
+  const isRiven  = tags.includes('riven')  || urlName.includes('riven');
+  const isLich   = tags.includes('lich')   || urlName.includes('kuva_lich') || urlName.includes('_lich');
+  const isSister = tags.includes('sister') || urlName.includes('sister')    || urlName.includes('parvos');
+  const isMod    = tags.includes('mod') && !isRiven;
+  const isSet    = urlName.endsWith('_set') || tags.includes('set');
+
+  /* Mod 阶数 */
+  if (isMod) {
+    _showField('bw-create-rank-wrap', true);
+    document.getElementById('bw-create-rank-label').textContent = '阶数（0–' + (item.max_rank||10) + '）';
+    document.getElementById('bw-create-rank').max = item.max_rank || 10;
+  } else { _showField('bw-create-rank-wrap', false); }
+
+  /* Riven 字段：mastery rank + re-rolls（WM称 re_rolls/mastery_rank） */
+  _showField('bw-create-mastery-wrap', isRiven);
+  _showField('bw-create-rerolls-wrap', isRiven);
+
+  /* Lich/Sister 字段 */
+  _showField('bw-create-lichname-wrap', isLich || isSister);
+  _showField('bw-create-element-wrap',  isLich || isSister);
+  _showField('bw-create-ephemera-wrap', isLich || isSister);
+  _showField('bw-create-quirk-wrap',    isLich || isSister);
+
+  /* Set 每批 */
+  _showField('bw-create-per-trade-wrap', isSet);
+
+  /* Lich/Sister 子类型下拉 */
   if (isLich || isSister) {
-    subtypeWrap.style.display = '';
-    const subtypes = isLich ? ['Kuva Lich','Kuva Lich (Ephemera)'] : ['Sisters of Parvos','Sisters of Parvos (Ephemera)'];
-    document.getElementById('bw-create-subtype').innerHTML = subtypes.map(function(t) { return '<option value="'+t+'">'+t+'</option>'; }).join('');
-  } else { subtypeWrap.style.display = 'none'; }
-  const isSet = (item.url_name||'').endsWith('_set') || tags.includes('set');
-  document.getElementById('bw-create-per-trade-wrap').style.display = isSet ? '' : 'none';
+    _showField('bw-create-subtype-wrap', true);
+    const subtypes = isLich
+      ? ['kuva_lich', 'kuva_lich_ephemera']
+      : ['sisters_of_parvos', 'sisters_of_parvos_ephemera'];
+    const labels = isLich
+      ? ['Kuva Lich', 'Kuva Lich（含 Ephemera）']
+      : ['Sisters of Parvos', 'Sisters of Parvos（含 Ephemera）'];
+    document.getElementById('bw-create-subtype').innerHTML =
+      subtypes.map(function(v, i) { return '<option value="'+v+'">'+labels[i]+'</option>'; }).join('');
+  } else { _showField('bw-create-subtype-wrap', false); }
 }
 
 /* ──────────────────────────────────────────────────────────

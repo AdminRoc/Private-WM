@@ -103,18 +103,22 @@ async function getSessionEmail(request, env) {
 async function handleMe(request, env) {
   const email = await getSessionEmail(request, env);
   if (!email) return jsonResponse({ ok: false, error: '未登录' }, 401);
-  /* 尝试从 WM 获取当前用户信息（含 slug / status） */
   try {
     const resp = await wmFetch(env, '/v2/profile', {});
     if (resp.ok) {
-      const j = await resp.json();
+      const j       = await resp.json();
       const profile = j.data || j;
       const slug    = profile.slug || profile.ingame_name || WM_SLUG;
       const status  = profile.status || 'offline';
-      return jsonResponse({ ok: true, session: { slug, status, email } });
+      /* avatar 字段格式：如 "user/avatars/default.png"，拼完整 WM 静态路径 */
+      const avatarPath = profile.avatar || null;
+      const avatar  = avatarPath
+        ? '/api/wm/avatar?path=' + encodeURIComponent(avatarPath)
+        : null;
+      return jsonResponse({ ok: true, session: { slug, status, email, avatar } });
     }
   } catch {}
-  return jsonResponse({ ok: true, session: { slug: WM_SLUG, status: 'offline', email } });
+  return jsonResponse({ ok: true, session: { slug: WM_SLUG, status: 'offline', email, avatar: null } });
 }
 
 /* ══ WM 后端代理：JWT 管理 ════════════════════════════════ */
@@ -443,9 +447,13 @@ async function handleThumbProxy(request) {
 
 async function handleAvatarProxy(request) {
   const url  = new URL(request.url);
+  /* 优先接受 path 参数（来自 /v2/profile avatar 字段），兼容旧 slug 参数 */
+  const path = url.searchParams.get('path');
   const slug = url.searchParams.get('slug');
-  if (!slug) return new Response('missing slug', { status: 400 });
-  const upstream = `https://warframe.market/static/assets/user/avatars/${slug}.png`;
+  if (!path && !slug) return new Response('missing path/slug', { status: 400 });
+  const upstream = path
+    ? 'https://warframe.market/static/assets/' + path.replace(/^\/+/, '')
+    : 'https://warframe.market/static/assets/user/avatars/' + slug + '.png';
   const r = await fetch(upstream, { headers: { 'Referer': 'https://warframe.market/' } });
   if (!r.ok) return new Response('not found', { status: 404 });
   const headers = new Headers();

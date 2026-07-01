@@ -292,6 +292,60 @@
         <select id="bw-create-subtype" class="bw-drawer-select"></select>
       </div>
 
+      <!-- Riven 专属字段 -->
+      <div class="bw-drawer-field" id="bw-create-rerolls-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-rerolls">重置次数</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-create-rerolls" class="bw-drawer-input" min="0" value="0" placeholder="0">
+        </div>
+      </div>
+      <div class="bw-drawer-field" id="bw-create-mastery-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-mastery">段位要求（MR 0–40）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-create-mastery" class="bw-drawer-input" min="0" max="40" value="0">
+        </div>
+      </div>
+
+      <!-- Lich / Sister 专属字段 -->
+      <div class="bw-drawer-field" id="bw-create-lichname-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-lichname">灵体名称（选填）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="text" id="bw-create-lichname" class="bw-drawer-input" placeholder="如：Grendel Prime">
+        </div>
+      </div>
+      <div class="bw-drawer-field" id="bw-create-element-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-element">元素</label>
+        <select id="bw-create-element" class="bw-drawer-select">
+          <option value="">无</option>
+          <option value="heat">火焰 Heat</option>
+          <option value="cold">冰冷 Cold</option>
+          <option value="electricity">电击 Electricity</option>
+          <option value="toxin">毒素 Toxin</option>
+          <option value="impact">冲击 Impact</option>
+          <option value="puncture">穿刺 Puncture</option>
+          <option value="slash">切割 Slash</option>
+          <option value="radiation">辐射 Radiation</option>
+          <option value="magnetic">磁性 Magnetic</option>
+          <option value="viral">病毒 Viral</option>
+          <option value="corrosive">腐蚀 Corrosive</option>
+          <option value="blast">爆炸 Blast</option>
+          <option value="gas">毒气 Gas</option>
+        </select>
+      </div>
+      <div class="bw-drawer-field" id="bw-create-ephemera-wrap" style="display:none">
+        <label class="bw-drawer-label">Ephemera 幻影效果</label>
+        <div class="bw-vis-pills">
+          <button class="bw-vis-pill active" id="bw-create-ephemera-no">无</button>
+          <button class="bw-vis-pill" id="bw-create-ephemera-yes">有</button>
+        </div>
+      </div>
+      <div class="bw-drawer-field" id="bw-create-quirk-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-quirk">Quirk 怪癖（选填）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="text" id="bw-create-quirk" class="bw-drawer-input" placeholder="quirk 内部名">
+        </div>
+      </div>
+
       <div class="bw-drawer-actions">
         <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-create-submit">创建订单</button>
       </div>
