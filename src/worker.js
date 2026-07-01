@@ -122,16 +122,54 @@ async function handleMe(request, env) {
 /* ══════════════════════════════════════════════
    WM 后端代理：JWT 管理
 ══════════════════════════════════════════════ */
+// 从 Set-Cookie 响应头里提取指定 cookie 的值
+function extractCookieValue(setCookieHeader, name) {
+  if (!setCookieHeader) return null;
+  // Set-Cookie 可能是多条，Cloudflare Workers 会把它们合并为逗号分隔
+  // 逐段匹配 name=value
+  const re = new RegExp('(?:^|,\\s*)' + name + '=([^;,]+)');
+  const m  = re.exec(setCookieHeader);
+  return m ? m[1] : null;
+}
+
 async function wmSignin(env) {
-  const resp = await fetch(`${WM_API}/v1/auth/signin`, {
-    method: 'POST',
+  // ① 先 GET 登录页，拿 CSRF cookie（WM 会在此步骤 Set-Cookie: XSRF-TOKEN=...）
+  const pageResp = await fetch('https://warframe.market/auth/signin', {
     headers: {
-      'Content-Type': 'application/json',
-      'Origin':       'https://warframe.market',
-      'Referer':      'https://warframe.market/auth/signin',
-      'Platform':     'pc',
-      'Language':     'en',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
+  });
+  const pageCookies = pageResp.headers.get('Set-Cookie') || '';
+
+  // 常见 CSRF cookie 名称依次尝试
+  const csrfToken =
+    extractCookieValue(pageCookies, 'XSRF-TOKEN') ||
+    extractCookieValue(pageCookies, 'csrftoken')  ||
+    extractCookieValue(pageCookies, 'csrf_token') ||
+    extractCookieValue(pageCookies, '_csrf');
+
+  // 拼出要带给 POST 的 Cookie 字符串（把 CSRF token 也包含进去）
+  const cookieForPost = csrfToken ? `XSRF-TOKEN=${csrfToken}` : '';
+
+  // ② POST signin，携带 CSRF token（header + cookie 双保险）
+  const postHeaders = {
+    'Content-Type': 'application/json',
+    'Origin':       'https://warframe.market',
+    'Referer':      'https://warframe.market/auth/signin',
+    'Platform':     'pc',
+    'Language':     'en',
+    'User-Agent':   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  };
+  if (csrfToken) {
+    postHeaders['X-XSRF-TOKEN'] = csrfToken;
+    postHeaders['X-CSRFToken']  = csrfToken;
+    postHeaders['Cookie']       = cookieForPost;
+  }
+
+  const resp = await fetch(`${WM_API}/v1/auth/signin`, {
+    method:  'POST',
+    headers: postHeaders,
     body: JSON.stringify({
       email:     env.WM_EMAIL,
       password:  env.WM_PASSWORD,
@@ -143,12 +181,11 @@ async function wmSignin(env) {
     throw new Error(`WM signin failed: ${resp.status} — ${errText.slice(0, 300)}`);
   }
 
-  // WM 在 Set-Cookie 里返回 JWT，响应体里没有 token 字段
+  // WM 在 Set-Cookie 里返回 JWT
   const setCookie = resp.headers.get('Set-Cookie') || '';
-  const match     = setCookie.match(/JWT=([^;,\s]+)/);
-  if (!match) throw new Error('WM signin: JWT cookie not found in response');
+  const jwt       = extractCookieValue(setCookie, 'JWT');
+  if (!jwt) throw new Error(`WM signin: JWT cookie not found. Set-Cookie: ${setCookie.slice(0, 200)}`);
 
-  const jwt = match[1];
   await env.BW_SESSIONS.put(WM_JWT_KV_KEY, jwt, { expirationTtl: WM_JWT_TTL });
   return jwt;
 }
