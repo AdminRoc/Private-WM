@@ -161,6 +161,8 @@ async function wmSignin(env) {
     'Language':     'en',
     'User-Agent':   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   };
+  // X-Requested-With 是许多框架判断 AJAX 请求（而非普通表单）的标志
+  postHeaders['X-Requested-With'] = 'XMLHttpRequest';
   if (csrfToken) {
     postHeaders['X-XSRF-TOKEN'] = csrfToken;
     postHeaders['X-CSRFToken']  = csrfToken;
@@ -304,6 +306,24 @@ export default {
     if (orderMatch) {
       if (request.method === 'PATCH')  return handleWmOrderPatch(request, env, orderMatch[1]);
       if (request.method === 'DELETE') return handleWmOrderDelete(request, env, orderMatch[1]);
+    }
+
+    // ── 调试：检查 WM 登录页返回的 Cookie（排查 CSRF，上线前删除） ──
+    if (p === '/api/debug/wm-csrf' && request.method === 'GET') {
+      if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+      try {
+        const r = await fetch('https://warframe.market/auth/signin', {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+        });
+        const allHeaders = {};
+        r.headers.forEach((v, k) => { allHeaders[k] = v; });
+        return jsonResponse({ status: r.status, headers: allHeaders });
+      } catch (e) {
+        return jsonResponse({ error: e.message }, 500);
+      }
     }
 
     // ── 静态资源（index.html / css / js / picture） ──
