@@ -375,7 +375,7 @@ function filtered() {
       const c = _avgCache[o._slug];
       let pass = false;
       if (_filterSpecial && c && c.special) pass = true;
-      if (_filterAlert  && c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25) pass = true;
+      if (_filterAlert  && c && c.avg !== null && c.avg !== undefined && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum <= c.avg * 1.25) pass = true;
       if (!pass) return false;
     }
     return true;
@@ -423,7 +423,7 @@ function mkRow(o) {
   const pts      = o.mod_rank !== undefined ? ' 阶 ' + o.mod_rank : '';
   const perTrade = (o.quantity_in_set && o.quantity_in_set > 1) ? '×' + o.quantity_in_set + '/批' : '';
   const c        = _avgCache[o._slug];
-  const isAlert  = c && o.platinum <= c.avg * 1.25;
+  const isAlert  = c && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum <= c.avg * 1.25;
 
   const div = document.createElement('div');
   div.className = 'bw-order-row' + (isHidden ? ' bw-order-hidden' : '') + (isAlert ? ' bw-alert-row' : '');
@@ -491,7 +491,7 @@ function render() {
   const allBuy  = _orders.filter(function(o){ return (o.order_type||o.orderType) !== 'sell'; });
   const alertCnt = _orders.filter(function(o){
     const c = _avgCache[o._slug];
-    return c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25;
+    return c && c.avg !== null && c.avg !== undefined && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum <= c.avg * 1.25;
   }).length;
   const covCnt  = Object.keys(_avgCache).filter(function(k){ return _avgCache[k] && _avgCache[k].avg !== null; }).length;
   const covPct  = _orders.length > 0 ? Math.round(covCnt / _orders.length * 100) : 0;
@@ -526,7 +526,7 @@ function render() {
   /* 扫光动画：有稀缺/警报数据时激活 */
   const allOrders = _orders;
   const hasSpecial = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.special; });
-  const hasAlert   = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25; });
+  const hasAlert   = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.avg !== null && c.avg !== undefined && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum <= c.avg * 1.25; });
   document.getElementById('bw-filter-special')?.classList.toggle('has-data', hasSpecial);
   document.getElementById('bw-filter-alert')  ?.classList.toggle('has-data', hasAlert);
 
@@ -561,7 +561,7 @@ function loadMissingAvg(list) {
       document.querySelectorAll('.bw-order-row[data-slug="' + slug + '"]').forEach(function(row) {
         const o = _orders.find(function(x) { return x.id === row.dataset.id; });
         if (data.special) row.classList.add('bw-special-row');
-        if (o && data.avg !== null && o.platinum < data.avg * 1.25) row.classList.add('bw-alert-row');
+        if (o && data.avg !== null && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum <= data.avg * 1.25) row.classList.add('bw-alert-row');
       });
       updateAlertBadges();
     });
@@ -574,7 +574,7 @@ function loadMissingAvg(list) {
 function updateAlertSection(visibleList) {
   const count = _orders.filter(function(o) {
     const c = _avgCache[o._slug];
-    return c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25;
+    return c && c.avg !== null && c.avg !== undefined && (o.order_type||o.orderType||o.type||'sell') === 'sell' && o.platinum <= c.avg * 1.25;
   }).length;
   const fab = document.getElementById('bw-alert-fab');
   const n   = document.getElementById('bw-alert-fab-n');
