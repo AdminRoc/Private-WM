@@ -280,7 +280,8 @@ async function handleWmOrders(request, env) {
       const it = itemMap[o.itemId];
       if (!it) return o;
       return Object.assign({}, o, {
-        item:  { zh: it.zh, en: it.en },
+        /* 前端依赖 item.url_name 提取 slug，统一放进去 */
+        item:  { zh: it.zh, en: it.en, url_name: it.slug },
         thumb: it.thumb || null,
         slug:  it.slug  || null,
         rarity:     it.rarity     || null,

@@ -37,8 +37,8 @@ function ago(ts) {
 }
 
 function itemName(o) {
-  if (_lang === 'zh' && o._zh) return o._zh;
-  return o.item?.en_name || o.item?.name || o._name || '';
+  if (_lang === 'zh') return o._zh || o._name || o._slug || '';
+  return o._name || o.item?.en || o.item?.en_name || o.item?.name || o._slug || '';
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -131,13 +131,20 @@ async function loadOrders() {
   const j = await apiFetch('/orders');
   const raw = Array.isArray(j.data) ? j.data : [];
   _orders = raw.map(function(o) {
-    const slug = o.item?.url_name || o.item?.id || '';
-    const itemObj = _items.find(function(i) { return i.url_name === slug || i.id === slug; });
+    /* worker 在 item 里注入了 url_name；顶层 slug 也备用 */
+    const slug = o.item?.url_name || o.slug || o.item?.id || '';
+    const itemObj = slug ? _items.find(function(i) { return (i.url_name||i.slug||i.id) === slug; }) : null;
+    /* v2 API 用 camelCase，统一别名到 snake_case 供渲染层使用 */
     return Object.assign({}, o, {
+      order_type:  o.order_type  || o.orderType  || 'sell',
+      last_update: o.last_update || o.lastUpdate  || o.updatedAt || '',
+      creation_date: o.creation_date || o.creationDate || o.createdAt || '',
+      mod_rank:    o.mod_rank    !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined),
+      quantity_in_set: o.quantity_in_set || o.quantityInSet || undefined,
       _slug:  slug,
-      _name:  o.item?.en_name || o.item?.name || slug,
-      _zh:    itemObj?.zh || itemObj?.i18n?.['zh-hans'] || '',
-      _thumb: itemObj?.thumb || o.item?.thumb || '',
+      _name:  o.item?.en || o.item?.en_name || o.item?.name || slug,
+      _zh:    o.item?.zh || itemObj?.zh || '',
+      _thumb: o.thumb || itemObj?.thumb || o.item?.thumb || '',
       _tags:  itemObj?.tags || [],
     });
   });
