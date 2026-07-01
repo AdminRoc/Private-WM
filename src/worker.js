@@ -47,17 +47,35 @@ function sessionCookieHeader(token, maxAge) {
   return SESSION_COOKIE + '=' + token + '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=' + maxAge;
 }
 
+/* 解析白名单，返回 raw 对象（数组或对象） */
+function parseAccountsJson(env) {
+  try {
+    const v = env.BW_ACCOUNTS_JSON;
+    return typeof v === 'string' ? JSON.parse(v) : v;
+  } catch { return null; }
+}
+
 /* 检查邮箱是否在白名单内
- * BW_ACCOUNTS_JSON 支持数组 ["a@b.com"] 或对象 {"a@b.com": "任意值"} */
+ * BW_ACCOUNTS_JSON 格式：
+ *   对象（推荐）：{"邮箱": "自定义显示名"}
+ *   数组（兼容）：["邮箱"]  → 显示名 fallback 到 WM ingame_name */
 function isWhitelisted(email, env) {
   try {
-    /* JSON 类型变量已自动解析；Text/Secret 类型是字符串，需手动 parse */
-    const v   = env.BW_ACCOUNTS_JSON;
-    const raw = typeof v === 'string' ? JSON.parse(v) : v;
+    const raw = parseAccountsJson(env);
     if (Array.isArray(raw)) return raw.map(e => String(e).trim().toLowerCase()).includes(email);
     if (raw && typeof raw === 'object') return Object.keys(raw).some(k => k.trim().toLowerCase() === email);
     return false;
   } catch { return false; }
+}
+
+/* 从白名单取自定义显示名，找不到则返回 null */
+function getDisplayName(email, env) {
+  try {
+    const raw = parseAccountsJson(env);
+    if (!raw || Array.isArray(raw)) return null;
+    const key = Object.keys(raw).find(k => k.trim().toLowerCase() === email);
+    return key ? String(raw[key]).trim() || null : null;
+  } catch { return null; }
 }
 
 /* ══ WM signin：用用户自己的凭据换取 WM JWT ══════════════ */
@@ -118,16 +136,19 @@ async function handleLogin(request, env) {
   try { wmJwt = await wmSigninWithCredentials(email, password); }
   catch(e) { return jsonResponse({ error: e.message }, 401); }
 
-  // 登录成功后立即取 WM 用户名，存入 session
-  let ingame_name = email.split('@')[0];
-  try {
-    const pr = await wmFetch(wmJwt, '/v1/profile', {});
-    if (pr.ok) {
-      const pj = await pr.json();
-      const profile = (pj.payload && pj.payload.profile) || pj.data || pj;
-      ingame_name = profile.ingame_name || profile.name || ingame_name;
-    }
-  } catch {}
+  // 优先用白名单里配置的自定义显示名；没有则 fallback 到 WM ingame_name
+  let ingame_name = getDisplayName(email, env);
+  if (!ingame_name) {
+    ingame_name = email.split('@')[0]; // 临时 fallback
+    try {
+      const pr = await wmFetch(wmJwt, '/v1/profile', {});
+      if (pr.ok) {
+        const pj = await pr.json();
+        const profile = (pj.payload && pj.payload.profile) || pj.data || pj;
+        ingame_name = profile.ingame_name || profile.name || ingame_name;
+      }
+    } catch {}
+  }
 
   const token = randomToken();
   await Promise.all([
