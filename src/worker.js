@@ -565,15 +565,26 @@ async function handleSetStatus(request, env) {
     return jsonResponse({ error: '无效状态值' }, 400);
   }
   try {
-    const resp = await wmFetch(wmJwt, '/v1/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+    const wsResp = await fetch('https://ws.warframe.market/socket', {
+      headers: {
+        'Upgrade':    'websocket',
+        'Connection': 'Upgrade',
+        'Cookie':     'JWT=' + wmJwt,
+        'Platform':   'pc',
+        'Language':   'en',
+        'Origin':     'https://warframe.market',
+      },
     });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return jsonResponse({ error: 'WM拒绝：' + resp.status + ' ' + txt.slice(0, 80) }, 502);
+    if (wsResp.status !== 101) {
+      return jsonResponse({ error: 'WS握手失败：' + wsResp.status }, 502);
     }
+    const ws = wsResp.webSocket;
+    ws.accept();
+    ws.send(JSON.stringify({ route: '@wfm|cmd/status/set', payload: { status, duration: null } }));
+    await new Promise(function(resolve) {
+      ws.addEventListener('message', function() { ws.close(); resolve(); });
+      setTimeout(function() { try { ws.close(); } catch {} resolve(); }, 3000);
+    });
     return jsonResponse({ ok: true, status });
   } catch(e) { return jsonResponse({ error: e.message }, 502); }
 }
