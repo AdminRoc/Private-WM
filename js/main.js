@@ -186,7 +186,7 @@ function renderProfile(sess) {
   const avatarSrc = 'https://wm.wfspeed.run/api/wm/avatar?slug=' + encodeURIComponent(slug);
   card.innerHTML = `
 <img class="bw-avatar" id="bw-avatar-img" src="${avatarSrc}" alt="avatar"
-     onerror="this.src='picture/avatar-csc-2026.svg'">
+     onerror="this.src=this.src.includes('csc-logo.png')?'picture/avatar-csc-2026.svg':'picture/csc-logo.png'">
 <div class="bw-profile-info">
   <div class="bw-ign">${slug}</div>
   <div class="bw-meta">
