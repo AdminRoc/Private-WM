@@ -193,7 +193,7 @@ function renderProfile(sess) {
   const dotCls    = status === 'ingame' ? 'ingame' : status === 'online' ? 'online' : 'offline';
   const statusTxt = { ingame: '游戏中', online: '在线', offline: '离线' }[status] || status;
   card.innerHTML = `
-<img class="bw-avatar" id="bw-avatar-img" src="/picture/csc-logo.png" alt="avatar">
+<img class="bw-avatar" id="bw-avatar-img" src="/picture/avatar-csc-2026.svg" alt="avatar">
 <div class="bw-profile-info">
   <div class="bw-ign">${slug}</div>
   <div class="bw-meta">

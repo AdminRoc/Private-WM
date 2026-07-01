@@ -540,7 +540,7 @@ async function handleThumbProxy(request) {
 
 async function handleAvatarProxy(request, env) {
   // 直接返回本地 CSC logo，不再尝试从 WM 获取头像
-  return env.ASSETS.fetch(new Request(new URL('/picture/csc-logo.png', request.url)));
+  return env.ASSETS.fetch(new Request(new URL('/picture/avatar-csc-2026.svg', request.url)));
 }
 
 /* ══ 定时任务：分批预计算全量 WM 物品均价 ══════════════════════
