@@ -209,9 +209,9 @@ async function wmFetch(env, path, options) {
   const jwt  = await getWmJwt(env);
   const opts = Object.assign({ method: 'GET' }, options || {});
   opts.headers = Object.assign({
-    'Authorization': 'JWT ' + jwt,
-    'Platform':      'pc',
-    'Language':      'en',
+    'Cookie':   'JWT=' + jwt,
+    'Platform': 'pc',
+    'Language': 'en',
   }, opts.headers || {});
 
   let resp = await fetch(WM_API + path, opts);
@@ -220,7 +220,7 @@ async function wmFetch(env, path, options) {
     // JWT 失效，清缓存、重新签入、重试一次
     await env.BW_SESSIONS.delete(WM_JWT_KV_KEY);
     const newJwt = await wmSignin(env);
-    opts.headers['Authorization'] = 'JWT ' + newJwt;
+    opts.headers['Cookie'] = 'JWT=' + newJwt;
     resp = await fetch(WM_API + path, opts);
   }
 
