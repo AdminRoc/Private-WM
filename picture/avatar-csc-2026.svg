@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <circle cx="60" cy="60" r="60" fill="#0d101e"/>
+  <circle cx="60" cy="60" r="58" fill="none" stroke="rgba(212,168,74,0.6)" stroke-width="1.5"/>
+  <text x="60" y="52" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="18" fill="#d4a84a">CSC</text>
+  <text x="60" y="74" text-anchor="middle" font-family="sans-serif" font-weight="400" font-size="11" fill="rgba(185,142,52,0.7)">ALLIANCE</text>
+</svg>

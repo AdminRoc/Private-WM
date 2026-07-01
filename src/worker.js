@@ -3,34 +3,21 @@
  * 职责：
  *   ① /api/auth/*   —— 我方站点白名单登录（与 WM 账号无关）。
  *   ② /api/wm/*     —— 后端代理 WM 私有 API（需通过 ① 验证才可调用）。
- *                      Worker 用存储的 WM 凭据在后端完成 WM 登录并缓存 JWT，
- *                      前端不直接接触 WM 凭据或 JWT。
- *   ③ 其余路径      —— 落到 Workers Static Assets（index.html/css/js/picture）。
- *
- * 安全要点：
- *   - 我方口令只比对 SHA-256 摘要，不存明文。
- *   - WM 凭据（WM_EMAIL / WM_PASSWORD）存 Cloudflare Secret，不进仓库。
- *   - WM JWT 存 KV，12h TTL；过期或 401 时自动用存储凭据重新签入。
- *   - 我方会话 cookie：HttpOnly + Secure + SameSite=Strict，JS 不可读。
- *   - 同一时间只允许一个我方会话（新登录挤掉旧会话）。
+ *   ③ 其余路径      —— 落到 Workers Static Assets。
  */
 
-/* ══════════════════════════════════════════════
-   常量
-══════════════════════════════════════════════ */
-const SESSION_COOKIE     = 'bw_session';
-const SESSION_TTL        = 60 * 60 * 24 * 7;   // 7 天
-const WM_API             = 'https://api.warframe.market';
-const WM_DEVICE_ID       = '987d81b2-8a2c-425b-ae0e-cfba824548da';
-const WM_SLUG            = 'csc-2026';
-const WM_JWT_KV_KEY      = 'wm_jwt';
-const WM_JWT_TTL         = 60 * 60 * 12;        // 12 小时
-const WM_ITEMS_KV_KEY    = 'wm_items_cache';
-const WM_ITEMS_TTL       = 60 * 60;             // 1 小时
+const SESSION_COOKIE  = 'bw_session';
+const SESSION_TTL     = 60 * 60 * 24 * 7;
+const WM_API          = 'https://api.warframe.market';
+const WM_DEVICE_ID    = '987d81b2-8a2c-425b-ae0e-cfba824548da';
+const WM_SLUG         = 'csc-2026';
+const WM_JWT_KV_KEY   = 'wm_jwt';
+const WM_JWT_TTL      = 60 * 60 * 12;
+const WM_ITEMS_KV_KEY = 'wm_items_cache';
+const WM_ITEMS_TTL    = 60 * 60;
+const WM_PRICE_TTL    = 60 * 5;   // 均价缓存 5 分钟
 
-/* ══════════════════════════════════════════════
-   通用工具
-══════════════════════════════════════════════ */
+/* ══ 通用工具 ═══════════════════════════════════════════════ */
 function jsonResponse(obj, status) {
   return new Response(JSON.stringify(obj), {
     status: status || 200,
@@ -63,9 +50,7 @@ function sessionCookieHeader(token, maxAge) {
   return SESSION_COOKIE + '=' + token + '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=' + maxAge;
 }
 
-/* ══════════════════════════════════════════════
-   我方站点：白名单登录系统
-══════════════════════════════════════════════ */
+/* ══ 我方站点：白名单登录系统 ══════════════════════════════ */
 async function handleLogin(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonResponse({ error: '请求格式错误' }, 400); }
@@ -75,7 +60,7 @@ async function handleLogin(request, env) {
   if (!email || !password) return jsonResponse({ error: '请输入邮箱和口令' }, 400);
 
   let accounts = {};
-  try { accounts = JSON.parse(env.BW_ACCOUNTS_JSON || '{}'); } catch { /* 全部拒绝 */ }
+  try { accounts = JSON.parse(env.BW_ACCOUNTS_JSON || '{}'); } catch {}
 
   let expectedHash = null;
   Object.keys(accounts).forEach((k) => {
@@ -117,28 +102,30 @@ async function getSessionEmail(request, env) {
 
 async function handleMe(request, env) {
   const email = await getSessionEmail(request, env);
-  if (!email) return jsonResponse({ authenticated: false });
-  return jsonResponse({ authenticated: true, email });
+  if (!email) return jsonResponse({ ok: false, error: '未登录' }, 401);
+  /* 尝试从 WM 获取当前用户信息（含 slug / status） */
+  try {
+    const resp = await wmFetch(env, '/v2/profile', {});
+    if (resp.ok) {
+      const j = await resp.json();
+      const profile = j.data || j;
+      const slug    = profile.slug || profile.ingame_name || WM_SLUG;
+      const status  = profile.status || 'offline';
+      return jsonResponse({ ok: true, session: { slug, status, email } });
+    }
+  } catch {}
+  return jsonResponse({ ok: true, session: { slug: WM_SLUG, status: 'offline', email } });
 }
 
-/* ══════════════════════════════════════════════
-   WM 后端代理：JWT 管理
-══════════════════════════════════════════════ */
-// 从 Set-Cookie 响应头里提取指定 cookie 的值
+/* ══ WM 后端代理：JWT 管理 ════════════════════════════════ */
 function extractCookieValue(setCookieHeader, name) {
   if (!setCookieHeader) return null;
-  // Set-Cookie 可能是多条，Cloudflare Workers 会把它们合并为逗号分隔
-  // 逐段匹配 name=value
   const re = new RegExp('(?:^|,\\s*)' + name + '=([^;,]+)');
   const m  = re.exec(setCookieHeader);
   return m ? m[1] : null;
 }
 
 async function wmSignin(env) {
-  // ① GET 登录页 HTML，同时收集 session cookie 和 CSRF token
-  //    WM 服务器把 CSRF token 嵌在 <meta name="csrf-token"> 中，
-  //    且 token 与本次 GET 建立的 server-side session 绑定，
-  //    所以 POST 时必须带回同一批 Set-Cookie 才能通过验证。
   const pageResp = await fetch('https://warframe.market/auth/signin', {
     headers: {
       'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -148,20 +135,15 @@ async function wmSignin(env) {
   });
   const html = await pageResp.text();
 
-  // 从 meta 标签提取 CSRF token
   const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
                  || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
   const csrfToken = metaMatch ? metaMatch[1] : null;
-  if (!csrfToken) throw new Error('WM signin: csrf-token meta not found in page');
+  if (!csrfToken) throw new Error('WM signin: csrf-token meta not found');
 
-  // 从 Set-Cookie 里提取 JWT（WM 在 GET /auth/signin 时就下发匿名预认证 JWT，
-  // CSRF token 与该 JWT 标识的服务端 session 绑定，POST 必须带回此 cookie）
   const rawSetCookie = pageResp.headers.get('Set-Cookie') || '';
   const jwtMatch = rawSetCookie.match(/JWT=([^;,\s]+)/);
   const preJwt = jwtMatch ? jwtMatch[1] : null;
 
-  // ② POST signin
-  //    实际 header 名（WM 前端代码）：x-csrftoken（全小写，无连字符）
   const postHeaders = {
     'Content-Type':    'application/json',
     'Accept':          'application/json',
@@ -172,29 +154,21 @@ async function wmSignin(env) {
     'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'x-csrftoken':     csrfToken,
   };
-  if (preJwt) {
-    postHeaders['Cookie'] = 'JWT=' + preJwt;
-  }
+  if (preJwt) postHeaders['Cookie'] = 'JWT=' + preJwt;
 
   const resp = await fetch(`${WM_API}/v1/auth/signin`, {
-    method:  'POST',
-    headers: postHeaders,
-    body: JSON.stringify({
-      email:     env.WM_EMAIL,
-      password:  env.WM_PASSWORD,
-      device_id: WM_DEVICE_ID,
-    }),
+    method: 'POST', headers: postHeaders,
+    body: JSON.stringify({ email: env.WM_EMAIL, password: env.WM_PASSWORD, device_id: WM_DEVICE_ID }),
   });
   if (!resp.ok) {
     const errText = await resp.text();
     throw new Error(`WM signin failed: ${resp.status} — ${errText.slice(0, 300)}`);
   }
 
-  // WM 在 POST 响应的 Set-Cookie 里返回已认证的新 JWT
   const postSetCookie = resp.headers.get('Set-Cookie') || '';
   const jwtResult     = postSetCookie.match(/JWT=([^;,\s]+)/);
   const jwt           = jwtResult ? jwtResult[1] : null;
-  if (!jwt) throw new Error(`WM signin: JWT not in POST response Set-Cookie. raw=${postSetCookie.slice(0, 200)}`);
+  if (!jwt) throw new Error(`WM signin: JWT not in POST Set-Cookie`);
 
   await env.BW_SESSIONS.put(WM_JWT_KV_KEY, jwt, { expirationTtl: WM_JWT_TTL });
   return jwt;
@@ -206,9 +180,34 @@ async function getWmJwt(env) {
   return wmSignin(env);
 }
 
-/* ══════════════════════════════════════════════
-   物品总表缓存（KV，1h TTL，Cron 主动刷新）
-══════════════════════════════════════════════ */
+async function wmFetch(env, path, options) {
+  const jwt  = await getWmJwt(env);
+  const opts = Object.assign({ method: 'GET' }, options || {});
+  opts.headers = Object.assign({
+    'Cookie':   'JWT=' + jwt,
+    'Platform': 'pc',
+    'Language': 'en',
+  }, opts.headers || {});
+
+  let resp = await fetch(WM_API + path, opts);
+
+  if (resp.status === 401) {
+    await env.BW_SESSIONS.delete(WM_JWT_KV_KEY);
+    const newJwt = await wmSignin(env);
+    opts.headers['Cookie'] = 'JWT=' + newJwt;
+    resp = await fetch(WM_API + path, opts);
+  }
+  return resp;
+}
+
+function wmJsonProxy(resp, text) {
+  return new Response(text, {
+    status:  resp.status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/* ══ 物品总表缓存（KV，1h TTL，Cron 主动刷新） ═══════════ */
 async function refreshItemsCache(env) {
   const [resp, zhResp] = await Promise.all([
     fetch(`${WM_API}/v2/items`, { headers: { 'Platform': 'pc', 'Language': 'en' } }),
@@ -222,20 +221,27 @@ async function refreshItemsCache(env) {
   }
   const items = (json.data || []).map(function (it) {
     if (!it.id) return null;
-    const en = (it.i18n && it.i18n['en'] && it.i18n['en'].name) || it.slug;
+    const en    = (it.i18n && it.i18n['en'] && it.i18n['en'].name) || it.slug;
     const zhApi = it.i18n && it.i18n['zh-hans'] && it.i18n['zh-hans'].name;
-    const zh = zhApi || zhMap[en] || null;
+    const zh    = zhApi || zhMap[en] || null;
+    // 缩略图路径（优先 i18n.en.thumb，否则顶层 thumb）
+    const thumb = (it.i18n && it.i18n['en'] && it.i18n['en'].thumb) || it.thumb || null;
+    const icon  = (it.i18n && it.i18n['en'] && it.i18n['en'].icon)  || it.icon  || null;
     return {
       id:           it.id,
       slug:         it.slug,
       zh:           zh || en,
       en:           en,
+      thumb:        thumb,
+      icon:         icon,
       bulkTradable: it.bulkTradable  || false,
       maxRank:      it.maxRank       || null,
       maxCharges:   it.maxCharges    || null,
       subtypes:     it.subtypes      || null,
       maxAmberStars: it.maxAmberStars || null,
       maxCyanStars:  it.maxCyanStars  || null,
+      rarity:       it.rarity        || null,
+      tradingTax:   it.trading_tax   || null,
     };
   }).filter(Boolean);
   await env.BW_SESSIONS.put(WM_ITEMS_KV_KEY, JSON.stringify(items), { expirationTtl: WM_ITEMS_TTL });
@@ -250,62 +256,32 @@ async function getItemsData(env) {
   return refreshItemsCache(env);
 }
 
-// 带自动重试（JWT 过期时重新签入一次）的 WM 请求
-async function wmFetch(env, path, options) {
-  const jwt  = await getWmJwt(env);
-  const opts = Object.assign({ method: 'GET' }, options || {});
-  opts.headers = Object.assign({
-    'Cookie':   'JWT=' + jwt,
-    'Platform': 'pc',
-    'Language': 'en',
-  }, opts.headers || {});
+/* ══ WM API 代理：路由处理函数 ════════════════════════════ */
 
-  let resp = await fetch(WM_API + path, opts);
-
-  if (resp.status === 401) {
-    // JWT 失效，清缓存、重新签入、重试一次
-    await env.BW_SESSIONS.delete(WM_JWT_KV_KEY);
-    const newJwt = await wmSignin(env);
-    opts.headers['Cookie'] = 'JWT=' + newJwt;
-    resp = await fetch(WM_API + path, opts);
-  }
-
-  return resp;
-}
-
-/* ══════════════════════════════════════════════
-   WM 后端代理：路由处理函数
-   全部需要先通过我方 session 鉴权
-══════════════════════════════════════════════ */
-
-function wmJsonProxy(resp, text) {
-  return new Response(text, {
-    status:  resp.status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-// GET /api/wm/orders —— 获取全部挂单（含隐藏），仅本账号可见
+// GET /api/wm/orders —— 我方全部订单（含隐藏），使用 /v2/orders/my
 async function handleWmOrders(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const [authResp, itemsList] = await Promise.all([
-      wmFetch(env, `/v2/orders/user/${WM_SLUG}`, {}),
+      wmFetch(env, '/v2/orders/my', {}),
       getItemsData(env),
     ]);
 
     const authJson = authResp.ok ? await authResp.json() : { data: [] };
 
     const itemMap = {};
-    (itemsList || []).forEach(function (it) {
-      itemMap[it.id] = it;
-    });
+    (itemsList || []).forEach(function (it) { itemMap[it.id] = it; });
 
     const merged = (authJson.data || []).map(function (o) {
       const it = itemMap[o.itemId];
       if (!it) return o;
       return Object.assign({}, o, {
-        item: { zh: it.zh, en: it.en },
+        item:  { zh: it.zh, en: it.en },
+        thumb: it.thumb || null,
+        slug:  it.slug  || null,
+        rarity:     it.rarity     || null,
+        tradingTax: it.tradingTax || null,
+        maxRank:    it.maxRank    || null,
       });
     });
 
@@ -315,7 +291,7 @@ async function handleWmOrders(request, env) {
   }
 }
 
-// GET /api/wm/items —— 返回 KV 缓存的物品总表（含 bulkTradable/maxRank 等元数据）
+// GET /api/wm/items
 async function handleWmItems(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
@@ -326,7 +302,19 @@ async function handleWmItems(request, env) {
   }
 }
 
-// POST /api/wm/orders —— 创建新挂单（WM 创建端点为 /v2/order 单数）
+// POST /api/wm/refresh-items —— 手动触发物品缓存刷新
+async function handleWmRefreshItems(request, env) {
+  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  try {
+    await env.BW_SESSIONS.delete(WM_ITEMS_KV_KEY);
+    const items = await refreshItemsCache(env);
+    return jsonResponse({ ok: true, count: (items || []).length });
+  } catch (e) {
+    return jsonResponse({ error: '刷新失败：' + e.message }, 502);
+  }
+}
+
+// POST /api/wm/orders —— 创建订单
 async function handleWmOrderCreate(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
@@ -340,7 +328,7 @@ async function handleWmOrderCreate(request, env) {
   }
 }
 
-// PATCH /api/wm/orders/:id —— 修改挂单（改价 / 切换可见性 / 改数量）
+// PATCH /api/wm/orders/:id
 async function handleWmOrderPatch(request, env, orderId) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
@@ -354,7 +342,7 @@ async function handleWmOrderPatch(request, env, orderId) {
   }
 }
 
-// DELETE /api/wm/orders/:id —— 删除挂单
+// DELETE /api/wm/orders/:id
 async function handleWmOrderDelete(request, env, orderId) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
@@ -366,34 +354,144 @@ async function handleWmOrderDelete(request, env, orderId) {
   }
 }
 
-/* ══════════════════════════════════════════════
-   主路由
-══════════════════════════════════════════════ */
+// GET /api/wm/price/:slug —— 计算物品"均价"
+// 规则：筛选在线ingame且出售中订单，去掉最高5个+最低3个，取均值
+async function handleWmPrice(request, env, slug) {
+  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+
+  const cacheKey = 'avg_price_' + slug;
+  const cached = await env.BW_SESSIONS.get(cacheKey);
+  if (cached) {
+    try { return jsonResponse({ data: JSON.parse(cached) }); } catch {}
+  }
+
+  try {
+    const resp = await wmFetch(env, `/v2/orders/item/${encodeURIComponent(slug)}`, {});
+    if (!resp.ok) return jsonResponse({ data: { avg: null, count: 0, used: 0 } });
+
+    const json = await resp.json();
+    // 过滤：sell 类型 + 卖家状态 ingame + visible
+    const prices = (json.data || [])
+      .filter(o => (o.orderType === 'sell' || o.order_type === 'sell') &&
+                   o.user && o.user.status === 'ingame' &&
+                   o.visible !== false)
+      .map(o => o.platinum)
+      .sort((a, b) => a - b);
+
+    let avg = null;
+    const count = prices.length;
+    let used = 0;
+
+    if (count > 0) {
+      const lo = Math.min(3, Math.floor(count / 5));
+      const hi = Math.min(5, Math.floor(count / 4));
+      const trimmed = prices.slice(lo, count - hi > lo ? count - hi : count);
+      used = trimmed.length;
+      avg = used > 0
+        ? Math.round(trimmed.reduce((s, v) => s + v, 0) / trimmed.length)
+        : Math.round(prices.reduce((s, v) => s + v, 0) / count);
+    }
+
+    const result = { avg, count, used };
+    await env.BW_SESSIONS.put(cacheKey, JSON.stringify(result), { expirationTtl: WM_PRICE_TTL });
+    return jsonResponse({ data: result });
+  } catch (e) {
+    return jsonResponse({ data: { avg: null, count: 0, used: 0 } });
+  }
+}
+
+// GET /api/wm/item/:slug —— 物品详情
+async function handleWmItemDetail(request, env, slug) {
+  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+
+  const cacheKey = 'item_detail_' + slug;
+  const cached = await env.BW_SESSIONS.get(cacheKey);
+  if (cached) {
+    try { return jsonResponse({ data: JSON.parse(cached) }); } catch {}
+  }
+
+  try {
+    const resp = await fetch(`${WM_API}/v2/item/${encodeURIComponent(slug)}`, {
+      headers: { 'Platform': 'pc', 'Language': 'zh-hans' },
+    });
+    if (!resp.ok) return jsonResponse({ data: null });
+    const json = await resp.json();
+    const data = json.data || null;
+    if (data) {
+      await env.BW_SESSIONS.put(cacheKey, JSON.stringify(data), { expirationTtl: 3600 });
+    }
+    return jsonResponse({ data });
+  } catch (e) {
+    return jsonResponse({ data: null });
+  }
+}
+
+/* ══ 主路由 ═══════════════════════════════════════════════ */
+/* ══ 静态资源代理（缩略图/头像） ═══════════════════════════ */
+async function handleThumbProxy(request) {
+  const url  = new URL(request.url);
+  const path = url.searchParams.get('path');
+  if (!path) return new Response('missing path', { status: 400 });
+  const upstream = 'https://warframe.market/static/' + path.replace(/^\/+/, '');
+  const r = await fetch(upstream, { headers: { 'Referer': 'https://warframe.market/' } });
+  const headers = new Headers();
+  const ct = r.headers.get('content-type');
+  if (ct) headers.set('content-type', ct);
+  headers.set('cache-control', 'public, max-age=86400');
+  return new Response(r.body, { status: r.status, headers });
+}
+
+async function handleAvatarProxy(request) {
+  const url  = new URL(request.url);
+  const slug = url.searchParams.get('slug');
+  if (!slug) return new Response('missing slug', { status: 400 });
+  const upstream = `https://warframe.market/static/assets/user/avatars/${slug}.png`;
+  const r = await fetch(upstream, { headers: { 'Referer': 'https://warframe.market/' } });
+  if (!r.ok) return new Response('not found', { status: 404 });
+  const headers = new Headers();
+  const ct = r.headers.get('content-type');
+  if (ct) headers.set('content-type', ct);
+  headers.set('cache-control', 'public, max-age=3600');
+  return new Response(r.body, { status: r.status, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const p   = url.pathname;
 
-    // ── 我方鉴权 ──────────────────────────────
-    if (p === '/api/auth/login'  && request.method === 'POST') return handleLogin(request, env);
-    if (p === '/api/auth/logout' && request.method === 'POST') return handleLogout(request, env);
-    if (p === '/api/auth/me'     && request.method === 'GET')  return handleMe(request, env);
+    /* auth 路由（旧名保留，同时支持 /api/wm/ 前缀别名）*/
+    if ((p === '/api/auth/login'  || p === '/api/wm/signin')   && request.method === 'POST') return handleLogin(request, env);
+    if ((p === '/api/auth/logout' || p === '/api/wm/signout')  && request.method === 'POST') return handleLogout(request, env);
+    if ((p === '/api/auth/me'     || p === '/api/wm/session')  && request.method === 'GET')  return handleMe(request, env);
 
-    // ── WM 私有 API 代理 ──────────────────────
-    if (p === '/api/wm/items'  && request.method === 'GET')  return handleWmItems(request, env);
-    if (p === '/api/wm/orders' && request.method === 'GET')  return handleWmOrders(request, env);
-    if (p === '/api/wm/orders' && request.method === 'POST') return handleWmOrderCreate(request, env);
-    const orderMatch = p.match(/^\/api\/wm\/orders\/([^/]+)$/);
+    /* 静态代理 */
+    if (p === '/api/wm/thumb'  && request.method === 'GET') return handleThumbProxy(request);
+    if (p === '/api/wm/avatar' && request.method === 'GET') return handleAvatarProxy(request);
+
+    if (p === '/api/wm/items'         && request.method === 'GET')  return handleWmItems(request, env);
+    if (p === '/api/wm/refresh-items' && request.method === 'POST') return handleWmRefreshItems(request, env);
+    if (p === '/api/wm/orders'        && request.method === 'GET')  return handleWmOrders(request, env);
+    if (p === '/api/wm/orders'        && request.method === 'POST') return handleWmOrderCreate(request, env);
+    /* 单数别名 /api/wm/order（POST=创建，PATCH/DELETE 由下方 match 处理）*/
+    if (p === '/api/wm/order' && request.method === 'POST') return handleWmOrderCreate(request, env);
+
+    /* /api/wm/orders/:id 或 /api/wm/order/:id */
+    const orderMatch = p.match(/^\/api\/wm\/orders?\/([^/]+)$/);
     if (orderMatch) {
       if (request.method === 'PATCH')  return handleWmOrderPatch(request, env, orderMatch[1]);
       if (request.method === 'DELETE') return handleWmOrderDelete(request, env, orderMatch[1]);
     }
 
-    // ── 静态资源（index.html / css / js / picture） ──
+    const priceMatch = p.match(/^\/api\/wm\/price\/([^/]+)$/);
+    if (priceMatch && request.method === 'GET') return handleWmPrice(request, env, priceMatch[1]);
+
+    const itemDetailMatch = p.match(/^\/api\/wm\/item\/([^/]+)$/);
+    if (itemDetailMatch && request.method === 'GET') return handleWmItemDetail(request, env, itemDetailMatch[1]);
+
     return env.ASSETS.fetch(request);
   },
 
-  // Cron Trigger：每小时主动刷新物品总表缓存
   async scheduled(event, env, ctx) {
     ctx.waitUntil(refreshItemsCache(env));
   },

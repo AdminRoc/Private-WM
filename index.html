@@ -3,91 +3,159 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="CSC·Alliance：Boss Tool —— Warframe.market 个人订单管理工具">
   <title>CSC·Alliance：Boss Tool</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
   <canvas id="star-canvas"></canvas>
   <div class="nebula-bg"></div>
 
+  <!-- 顶部 Header -->
   <header class="bw-header">
     <div class="bw-brand">
       <span class="bw-brand-cn">CSC·Alliance</span>
       <span class="bw-brand-divider"></span>
       <span class="bw-brand-sub">BOSS TOOL</span>
     </div>
-    <button class="bw-logout-btn" id="bw-logout-btn" title="退出登录">登出</button>
+    <div class="bw-header-right">
+      <button class="bw-logout-btn" id="bw-logout-btn" title="退出登录">退出</button>
+    </div>
   </header>
 
   <main class="page-wrap bw-wrap">
+    <!-- 个人资料卡 -->
     <section class="bw-profile-card" id="bw-profile-card">
-      <div class="bw-skel-row" style="width:120px;height:120px;border-radius:50%;flex-shrink:0"></div>
+      <div class="bw-skel-row" style="width:100px;height:100px;border-radius:50%;flex-shrink:0"></div>
       <div class="bw-profile-info" style="flex:1">
         <div class="bw-skel-row" style="width:160px;height:22px;margin-bottom:.6rem;"></div>
         <div class="bw-skel-row" style="width:240px;height:16px;"></div>
       </div>
     </section>
 
-    <!-- 筛选工具栏 -->
+    <!-- 工具栏 -->
     <div class="bw-toolbar" id="bw-toolbar">
-      <div class="bw-toolbar-filters">
-        <div class="bw-filter-group">
-          <button class="bw-type-pill active" data-type="all">全部</button>
-          <button class="bw-type-pill" data-type="sell">出售</button>
-          <button class="bw-type-pill" data-type="buy">求购</button>
+      <div class="bw-toolbar-top">
+        <!-- 筛选组 -->
+        <div class="bw-toolbar-filters">
+          <div class="bw-filter-group">
+            <button class="bw-type-pill active" data-type="all">全部</button>
+            <button class="bw-type-pill" data-type="sell">出售</button>
+            <button class="bw-type-pill" data-type="buy">求购</button>
+          </div>
+          <div class="bw-filter-group">
+            <button class="bw-vis-f-btn active" data-vis="all">全部</button>
+            <button class="bw-vis-f-btn" data-vis="visible">上架中</button>
+            <button class="bw-vis-f-btn" data-vis="hidden">已下架</button>
+          </div>
+          <div class="bw-price-range">
+            <input type="number" id="bw-price-min" class="bw-range-input" placeholder="最低价" min="0">
+            <span class="bw-range-sep">—</span>
+            <input type="number" id="bw-price-max" class="bw-range-input" placeholder="最高价" min="0">
+            <span class="bw-range-unit">p</span>
+          </div>
+          <div class="bw-search-wrap">
+            <input type="text" id="bw-search-q" class="bw-search-input" placeholder="搜索物品名称…" autocomplete="off">
+          </div>
         </div>
-        <div class="bw-filter-group">
-          <button class="bw-vis-f-btn active" data-vis="all">全部</button>
-          <button class="bw-vis-f-btn" data-vis="visible">显示中</button>
-          <button class="bw-vis-f-btn" data-vis="hidden">隐藏中</button>
-        </div>
-        <div class="bw-price-range">
-          <input type="number" id="bw-price-min" class="bw-range-input" placeholder="最低价" min="0">
-          <span class="bw-range-sep">—</span>
-          <input type="number" id="bw-price-max" class="bw-range-input" placeholder="最高价" min="0">
-          <span class="bw-range-unit">p</span>
-        </div>
-        <select id="bw-sort-sel" class="bw-sort-sel">
-          <option value="updated_desc">最新更新</option>
-          <option value="updated_asc">最早更新</option>
-          <option value="price_asc">价格升序</option>
-          <option value="price_desc">价格降序</option>
-          <option value="created_desc">最新挂单</option>
-          <option value="created_asc">最早挂单</option>
-          <option value="qty_desc">数量降序</option>
-          <option value="qty_asc">数量升序</option>
-        </select>
-        <div class="bw-search-wrap">
-          <input type="text" id="bw-search-q" class="bw-search-input" placeholder="搜索物品名称…" autocomplete="off">
+
+        <!-- 右侧控件 -->
+        <div class="bw-toolbar-right">
+          <span class="bw-order-stats" id="bw-order-stats"></span>
+
+          <!-- 均价倍率 -->
+          <div class="bw-mult-wrap" title="价格目标 = 均价 × 倍率">
+            <span class="bw-mult-label">均价倍率</span>
+            <input type="number" id="bw-multiplier" class="bw-mult-input" value="2" min="0.1" max="20" step="0.1">
+            <span class="bw-mult-x">×</span>
+          </div>
+
+          <!-- 语言切换 -->
+          <button class="bw-lang-btn" id="bw-lang-btn" title="切换中/英文名称" aria-label="切换语言">
+            <span class="bw-lang-inner">
+              <span class="bw-lang-seg active" id="bw-lang-zh">中</span>
+              <span class="bw-lang-seg" id="bw-lang-en">EN</span>
+            </span>
+          </button>
+
+          <!-- 自定义排序下拉 -->
+          <div class="bw-sort-wrap" id="bw-sort-wrap">
+            <button class="bw-sort-trigger" id="bw-sort-trigger">
+              <span id="bw-sort-label">最新更新</span>
+              <svg class="bw-sort-arrow" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="bw-sort-dropdown" id="bw-sort-dropdown">
+              <div class="bw-sort-item active" data-sort="updated_desc">最新更新</div>
+              <div class="bw-sort-item" data-sort="updated_asc">最早更新</div>
+              <div class="bw-sort-item" data-sort="name_asc">名称正序 A→Z</div>
+              <div class="bw-sort-item" data-sort="name_desc">名称逆序 Z→A</div>
+              <div class="bw-sort-item" data-sort="price_asc">价格升序</div>
+              <div class="bw-sort-item" data-sort="price_desc">价格降序</div>
+              <div class="bw-sort-item" data-sort="created_desc">最新挂入</div>
+              <div class="bw-sort-item" data-sort="created_asc">最早挂入</div>
+              <div class="bw-sort-item" data-sort="qty_desc">数量降序</div>
+              <div class="bw-sort-item" data-sort="qty_asc">数量升序</div>
+            </div>
+          </div>
+
+          <!-- 全部上架 / 下架 -->
+          <button class="bw-vis-all-btn" id="bw-vis-show-all" title="全部上架">上架全部</button>
+          <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="全部下架">下架全部</button>
+
+          <button class="bw-create-btn" id="bw-create-btn">＋ 创建订单</button>
         </div>
       </div>
-      <div class="bw-toolbar-right">
-        <span class="bw-order-stats" id="bw-order-stats"></span>
-        <button class="bw-lang-btn" id="bw-lang-btn" title="切换中/英文名称" aria-label="切换语言">
-          <span class="bw-lang-inner">
-            <span class="bw-lang-seg active" id="bw-lang-zh">中</span>
-            <span class="bw-lang-seg" id="bw-lang-en">EN</span>
-          </span>
-        </button>
-        <button class="bw-create-btn" id="bw-create-btn">+ 创建挂单</button>
+
+      <!-- 批量操作面板（筛选激活时显示） -->
+      <div class="bw-batch-panel" id="bw-batch-panel" style="display:none">
+        <span class="bw-batch-label">批量操作（当前筛选 <span id="bw-batch-count">0</span> 条）：</span>
+        <div class="bw-batch-row">
+          <label class="bw-batch-field-label">改价格</label>
+          <input type="number" id="bw-batch-price" class="bw-batch-input" placeholder="新价格 p" min="1">
+          <button class="bw-batch-btn" id="bw-batch-price-btn">执行</button>
+        </div>
+        <div class="bw-batch-row">
+          <label class="bw-batch-field-label">改数量</label>
+          <input type="number" id="bw-batch-qty" class="bw-batch-input" placeholder="新数量" min="1">
+          <button class="bw-batch-btn" id="bw-batch-qty-btn">执行</button>
+        </div>
+        <div class="bw-batch-row">
+          <label class="bw-batch-field-label">批量刷新均价倍率</label>
+          <button class="bw-batch-btn" id="bw-batch-mult-btn">应用当前倍率</button>
+        </div>
+        <div class="bw-batch-progress" id="bw-batch-progress" style="display:none">
+          <div class="bw-batch-bar" id="bw-batch-bar"></div>
+          <span class="bw-batch-prog-text" id="bw-batch-prog-text">0 / 0</span>
+        </div>
       </div>
     </div>
 
-    <!-- 订单列表 -->
+    <!-- 价格警报区 -->
+    <div class="bw-alert-section" id="bw-alert-section" style="display:none">
+      <div class="bw-alert-header">
+        <span class="bw-alert-icon">⚠</span>
+        <span class="bw-alert-title">价格警报</span>
+        <span class="bw-alert-sub" id="bw-alert-count"></span>
+        <button class="bw-alert-close" id="bw-alert-close">✕</button>
+      </div>
+      <div id="bw-alert-list" class="bw-order-list bw-alert-list"></div>
+    </div>
+
+    <!-- 价格警报浮动按钮（有警报时出现） -->
+    <button class="bw-alert-fab" id="bw-alert-fab" style="display:none" title="查看价格警报">
+      <span class="bw-alert-fab-icon">⚠</span>
+      <span id="bw-alert-fab-n">0</span>
+    </button>
+
+    <!-- 订单分栏 -->
     <section class="bw-orders">
       <div class="bw-orders-col">
-        <h2 class="bw-col-title bw-col-sell">出售挂单 <span class="bw-col-count" id="bw-sell-count"></span></h2>
+        <h2 class="bw-col-title bw-col-sell">出售订单 <span class="bw-col-count" id="bw-sell-count"></span></h2>
         <div id="bw-sell-list" class="bw-order-list">
           <div class="bw-skel-row"></div><div class="bw-skel-row"></div><div class="bw-skel-row"></div>
         </div>
       </div>
       <div class="bw-orders-col">
-        <h2 class="bw-col-title bw-col-buy">求购挂单 <span class="bw-col-count" id="bw-buy-count"></span></h2>
+        <h2 class="bw-col-title bw-col-buy">求购订单 <span class="bw-col-count" id="bw-buy-count"></span></h2>
         <div id="bw-buy-list" class="bw-order-list">
           <div class="bw-skel-row"></div><div class="bw-skel-row"></div><div class="bw-skel-row"></div>
         </div>
@@ -95,11 +163,11 @@
     </section>
   </main>
 
-  <!-- 遮罩（编辑抽屉） -->
+  <!-- 编辑抽屉遮罩 -->
   <div id="bw-drawer-overlay" class="bw-drawer-overlay"></div>
 
   <!-- 编辑抽屉 -->
-  <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="编辑挂单">
+  <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="编辑订单">
     <div class="bw-drawer-header">
       <span class="bw-drawer-title" id="bw-drawer-item-name">—</span>
       <button class="bw-drawer-close" id="bw-drawer-close" title="关闭">✕</button>
@@ -110,8 +178,8 @@
       <div class="bw-drawer-field">
         <label class="bw-drawer-label">可见性</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">可见</button>
-          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">隐藏</button>
+          <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">上架</button>
+          <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">下架</button>
         </div>
       </div>
 
@@ -121,6 +189,7 @@
           <input type="number" id="bw-drawer-price" class="bw-drawer-input" min="1" max="900000" placeholder="例如: 120">
           <span class="bw-drawer-input-unit">p</span>
         </div>
+        <div class="bw-drawer-price-hint" id="bw-drawer-price-hint"></div>
       </div>
 
       <div class="bw-drawer-field">
@@ -131,7 +200,7 @@
       </div>
 
       <div class="bw-drawer-field" id="bw-drawer-per-trade-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-drawer-per-trade">每批数量（批量出售，1–6）</label>
+        <label class="bw-drawer-label" for="bw-drawer-per-trade">每批数量（1–6）</label>
         <div class="bw-drawer-input-wrap">
           <input type="number" id="bw-drawer-per-trade" class="bw-drawer-input" min="1" max="6" placeholder="1–6">
         </div>
@@ -139,11 +208,11 @@
 
       <div class="bw-drawer-actions">
         <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-drawer-update">更新</button>
-        <button class="bw-drawer-btn bw-drawer-btn-delete" id="bw-drawer-delete">删除挂单</button>
+        <button class="bw-drawer-btn bw-drawer-btn-delete" id="bw-drawer-delete">删除订单</button>
       </div>
 
       <div class="bw-drawer-confirm-del" id="bw-drawer-confirm-del">
-        <p class="bw-drawer-confirm-text">确认删除这条挂单？此操作不可撤销。</p>
+        <p class="bw-drawer-confirm-text">⚠ 确认删除此订单？操作不可撤销。</p>
         <div class="bw-drawer-confirm-btns">
           <button class="bw-drawer-btn bw-drawer-btn-cancel" id="bw-drawer-confirm-no">取消</button>
           <button class="bw-drawer-btn bw-drawer-btn-delete-confirm" id="bw-drawer-confirm-yes">确认删除</button>
@@ -154,17 +223,16 @@
     </div>
   </aside>
 
-  <!-- 遮罩（创建抽屉） -->
+  <!-- 创建抽屉遮罩 -->
   <div id="bw-create-overlay" class="bw-drawer-overlay"></div>
 
-  <!-- 创建挂单抽屉 -->
-  <aside id="bw-create-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="创建挂单">
+  <!-- 创建抽屉 -->
+  <aside id="bw-create-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="创建订单">
     <div class="bw-drawer-header">
-      <span class="bw-drawer-title">创建新挂单</span>
+      <span class="bw-drawer-title">创建新订单</span>
       <button class="bw-drawer-close" id="bw-create-close" title="关闭">✕</button>
     </div>
     <div class="bw-drawer-body">
-
       <div class="bw-drawer-field">
         <label class="bw-drawer-label">物品搜索</label>
         <div class="bw-item-search-wrap">
@@ -185,8 +253,8 @@
       <div class="bw-drawer-field">
         <label class="bw-drawer-label">可见性</label>
         <div class="bw-vis-pills">
-          <button class="bw-vis-pill active" id="bw-create-vis-on">可见</button>
-          <button class="bw-vis-pill" id="bw-create-vis-off">隐藏</button>
+          <button class="bw-vis-pill active" id="bw-create-vis-on">上架</button>
+          <button class="bw-vis-pill" id="bw-create-vis-off">下架</button>
         </div>
       </div>
 
@@ -206,16 +274,16 @@
       </div>
 
       <div class="bw-drawer-field" id="bw-create-per-trade-wrap" style="display:none">
-        <label class="bw-drawer-label" for="bw-create-per-trade">每批数量（批量出售，1–6）</label>
+        <label class="bw-drawer-label" for="bw-create-per-trade">每批数量（1–6）</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-create-per-trade" class="bw-drawer-input" min="1" max="6" value="1" placeholder="1–6">
+          <input type="number" id="bw-create-per-trade" class="bw-drawer-input" min="1" max="6" value="1">
         </div>
       </div>
 
       <div class="bw-drawer-field" id="bw-create-rank-wrap" style="display:none">
         <label class="bw-drawer-label" for="bw-create-rank" id="bw-create-rank-label">等级</label>
         <div class="bw-drawer-input-wrap">
-          <input type="number" id="bw-create-rank" class="bw-drawer-input" min="0" value="0" placeholder="0">
+          <input type="number" id="bw-create-rank" class="bw-drawer-input" min="0" value="0">
         </div>
       </div>
 
@@ -225,9 +293,8 @@
       </div>
 
       <div class="bw-drawer-actions">
-        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-create-submit">创建挂单</button>
+        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-create-submit">创建订单</button>
       </div>
-
       <div class="bw-drawer-msg" id="bw-create-msg"></div>
     </div>
   </aside>
