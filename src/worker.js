@@ -210,20 +210,26 @@ async function getWmJwt(env) {
    物品总表缓存（KV，1h TTL，Cron 主动刷新）
 ══════════════════════════════════════════════ */
 async function refreshItemsCache(env) {
-  const resp = await fetch(`${WM_API}/v2/items`, {
-    headers: { 'Platform': 'pc', 'Language': 'en' },
-  });
+  const [resp, zhResp] = await Promise.all([
+    fetch(`${WM_API}/v2/items`, { headers: { 'Platform': 'pc', 'Language': 'en' } }),
+    fetch('https://wfspeed.run/data/item-i18n-harvest.json').catch(() => null),
+  ]);
   if (!resp.ok) return null;
   const json = await resp.json();
+  let zhMap = {};
+  if (zhResp && zhResp.ok) {
+    try { zhMap = await zhResp.json(); } catch {}
+  }
   const items = (json.data || []).map(function (it) {
     if (!it.id) return null;
-    const zh = it.i18n && it.i18n['zh-hans'] && it.i18n['zh-hans'].name;
-    const en = it.i18n && it.i18n['en'] && it.i18n['en'].name;
+    const en = (it.i18n && it.i18n['en'] && it.i18n['en'].name) || it.slug;
+    const zhApi = it.i18n && it.i18n['zh-hans'] && it.i18n['zh-hans'].name;
+    const zh = zhApi || zhMap[en] || null;
     return {
       id:           it.id,
       slug:         it.slug,
-      zh:           zh || en || it.slug,
-      en:           en || it.slug,
+      zh:           zh || en,
+      en:           en,
       bulkTradable: it.bulkTradable  || false,
       maxRank:      it.maxRank       || null,
       maxCharges:   it.maxCharges    || null,

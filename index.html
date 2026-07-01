@@ -68,7 +68,12 @@
       </div>
       <div class="bw-toolbar-right">
         <span class="bw-order-stats" id="bw-order-stats"></span>
-        <button class="bw-lang-btn" id="bw-lang-btn" title="切换中/英文名称">中</button>
+        <button class="bw-lang-btn" id="bw-lang-btn" title="切换中/英文名称" aria-label="切换语言">
+          <span class="bw-lang-inner">
+            <span class="bw-lang-seg active" id="bw-lang-zh">中</span>
+            <span class="bw-lang-seg" id="bw-lang-en">EN</span>
+          </span>
+        </button>
         <button class="bw-create-btn" id="bw-create-btn">+ 创建挂单</button>
       </div>
     </div>

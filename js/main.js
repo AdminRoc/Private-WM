@@ -268,12 +268,15 @@
       });
     }
 
-    var langBtn = document.getElementById('bw-lang-btn');
+    var langBtn  = document.getElementById('bw-lang-btn');
+    var langZhSeg = document.getElementById('bw-lang-zh');
+    var langEnSeg = document.getElementById('bw-lang-en');
     if (langBtn) {
       langBtn.addEventListener('click', function () {
         _lang = (_lang === 'zh') ? 'en' : 'zh';
-        langBtn.textContent = _lang === 'zh' ? '中' : 'EN';
         langBtn.classList.toggle('is-en', _lang === 'en');
+        if (langZhSeg) langZhSeg.classList.toggle('active', _lang === 'zh');
+        if (langEnSeg) langEnSeg.classList.toggle('active', _lang === 'en');
         renderFiltered();
       });
     }
