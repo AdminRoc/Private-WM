@@ -98,14 +98,19 @@ img { display: block; max-width: 100%; }
 /* ─── 登出按钮 ─── */
 .bw-logout-btn {
   position: absolute; right: 1.4rem;
-  background: transparent;
-  border: 1px solid var(--c-gold-faint);
+  background: rgba(203,74,158,.08);
+  border: 1px solid rgba(203,74,158,.35);
   border-radius: var(--r-sm);
-  color: var(--c-text2); font-family: var(--f-sci); font-size: .78rem;
-  letter-spacing: .06em; padding: .35rem .8rem; cursor: pointer;
-  transition: border-color .2s ease, color .2s ease;
+  color: rgba(203,74,158,.75); font-family: var(--f-sci); font-size: .76rem;
+  letter-spacing: .07em; padding: .32rem .85rem; cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
 }
-.bw-logout-btn:hover { border-color: var(--c-gold-mid); color: var(--c-gold-bright); }
+.bw-logout-btn:hover {
+  background: rgba(203,74,158,.18);
+  border-color: var(--c-sell);
+  color: var(--c-sell);
+  box-shadow: 0 0 12px rgba(203,74,158,.2);
+}
 
 /* ─── 页面布局 ─── */
 .page-wrap { position: relative; z-index: 2; }
@@ -194,6 +199,30 @@ img { display: block; max-width: 100%; }
 }
 .bw-sort-sel:focus { border-color: var(--c-gold-mid); }
 .bw-sort-sel option { background: #0d101e; }
+
+/* 物品搜索框 */
+.bw-search-wrap { position: relative; }
+.bw-search-input {
+  width: 160px; padding: .28rem .7rem;
+  background: rgba(0,0,0,.35); border: 1px solid var(--c-gold-faint);
+  border-radius: var(--r-sm); color: var(--c-white);
+  font-family: var(--f-cn); font-size: .82rem;
+  outline: none; transition: border-color .16s ease, width .2s ease;
+}
+.bw-search-input:focus { border-color: var(--c-gold-mid); width: 200px; }
+.bw-search-input::placeholder { color: var(--c-text2); }
+
+/* 语言切换按钮 */
+.bw-lang-btn {
+  padding: .28rem .65rem;
+  background: rgba(192,148,58,.08); border: 1px solid var(--c-gold-faint);
+  border-radius: var(--r-sm); color: var(--c-text2);
+  font-family: var(--f-sci); font-size: .76rem; font-weight: 700; letter-spacing: .05em;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+.bw-lang-btn:hover  { border-color: var(--c-gold-dim); color: var(--c-gold-bright); }
+.bw-lang-btn.is-en  { background: rgba(192,148,58,.15); border-color: var(--c-gold-mid); color: var(--c-gold-bright); }
 
 /* 统计 & 创建按钮 */
 .bw-order-stats {
@@ -512,3 +541,10 @@ input[type=text].bw-drawer-input { padding-right: .85rem; font-family: var(--f-c
 @media (prefers-reduced-motion: reduce) {
   .bw-profile-card, .bw-orders-col, .bw-order-row, .bw-toolbar { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
+
+/* ─── 自定义滚动条 ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-gold-faint); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-gold-dim); }
+* { scrollbar-width: thin; scrollbar-color: var(--c-gold-faint) transparent; }

@@ -13,6 +13,7 @@
   var _ordersCache = [];
   var _itemsList   = [];   // [{id, slug, zh, en, bulkTradable, maxRank, ...}]
   var _itemsById   = {};   // id -> item
+  var _lang        = 'zh'; // 'zh' | 'en'
 
   var _filterState = {
     type:     'all',
@@ -20,6 +21,7 @@
     priceMin: null,
     priceMax: null,
     sort:     'updated_desc',
+    search:   '',
   };
 
   /* ══ 工具函数 ════════════════════════════════════════════ */
@@ -65,27 +67,36 @@
   /* ══ 渲染：资料卡 ════════════════════════════════════════ */
   function avatarChain(user) {
     var custom = 'picture/avatar-' + encodeURIComponent(PROFILE_SLUG) + '.png';
-    var wm = user.avatar ? WM_PROXY_BASE + '/static/' + user.avatar : null;
-    return [custom, wm].filter(Boolean);
+    var av = user.avatar || (user.profile && user.profile.avatar);
+    var wmProxy  = av ? WM_PROXY_BASE + '/static/' + av : null;
+    var wmDirect = av ? 'https://warframe.market/static/' + av : null;
+    return [custom, wmProxy, wmDirect].filter(Boolean);
   }
 
   function renderProfile(user) {
     var card = document.getElementById('bw-profile-card');
     if (!user) { card.innerHTML = '<div class="bw-empty">未能获取账号资料。</div>'; return; }
-    var chain = avatarChain(user);
+    // WM API v2 可能返回 snake_case 或 camelCase，兼容两种
+    var profile     = user.profile || user;
+    var ingameName  = profile.ingame_name || profile.ingameName || profile.inGameName || PROFILE_SLUG;
+    var statusKey   = profile.status || 'offline';
+    var masteryRank = profile.mastery_rank || profile.masteryRank;
+    var reputation  = profile.reputation;
+    var chain = avatarChain(profile);
     var src = chain.shift() || '';
-    var fbAttr = chain.length
-      ? ' onerror="this.onerror=null;this.src=\'' + esc(chain[0]) + '\';"'
+    var fallbacks = chain.slice();
+    var fbAttr = fallbacks.length
+      ? ' onerror="(function(el){var f=' + JSON.stringify(fallbacks) + ';var n=el.getAttribute(\'data-fi\')||0;el.setAttribute(\'data-fi\',+n+1);var s=f[+n];if(s){el.onerror=null;el.src=s;}else{el.style.visibility=\'hidden\';}})(this);"'
       : ' onerror="this.style.visibility=\'hidden\';"';
-    var status = STATUS_LABEL[user.status] || user.status || '';
+    var status = STATUS_LABEL[statusKey] || statusKey || '';
     card.innerHTML =
       '<img class="bw-avatar" src="' + esc(src) + '" alt=""' + fbAttr + '>' +
       '<div class="bw-profile-info">' +
-        '<div class="bw-ign">' + esc(user.ingameName || PROFILE_SLUG) + '</div>' +
+        '<div class="bw-ign">' + esc(ingameName) + '</div>' +
         '<div class="bw-meta">' +
-          '<span><span class="bw-status-dot ' + esc(user.status || 'offline') + '"></span>' + esc(status) + '</span>' +
-          (user.masteryRank ? '<span>段位 MR' + esc(user.masteryRank) + '</span>' : '') +
-          (typeof user.reputation === 'number' ? '<span>声望 ' + esc(user.reputation) + '</span>' : '') +
+          '<span><span class="bw-status-dot ' + esc(statusKey) + '"></span>' + esc(status) + '</span>' +
+          (masteryRank ? '<span>段位 MR' + esc(masteryRank) + '</span>' : '') +
+          (typeof reputation === 'number' ? '<span>声望 ' + esc(reputation) + '</span>' : '') +
         '</div>' +
       '</div>';
   }
@@ -107,6 +118,16 @@
     if (_filterState.priceMax !== null)
       list = list.filter(function (o) { return o.platinum <= _filterState.priceMax; });
 
+    if (_filterState.search) {
+      var sq = _filterState.search.toLowerCase();
+      list = list.filter(function (o) {
+        var zh = o.item && o.item.zh ? o.item.zh.toLowerCase() : '';
+        var en = o.item && o.item.en ? o.item.en.toLowerCase() : '';
+        var id = (o.itemId || '').toLowerCase();
+        return zh.indexOf(sq) !== -1 || en.indexOf(sq) !== -1 || id.indexOf(sq) !== -1;
+      });
+    }
+
     var s = _filterState.sort;
     list.sort(function (a, b) {
       if (s === 'price_asc')    return a.platinum - b.platinum;
@@ -124,7 +145,9 @@
 
   /* ══ 渲染：订单行 ════════════════════════════════════════ */
   function orderRow(o) {
-    var item   = (o.item && (o.item.zh || o.item.en)) || o.itemId || '—';
+    var item = _lang === 'en'
+      ? ((o.item && (o.item.en || o.item.zh)) || o.itemId || '—')
+      : ((o.item && (o.item.zh || o.item.en)) || o.itemId || '—');
     var hidden = o.visible === false;
     var extras = [];
     if (o.rank != null) extras.push('R' + o.rank);
@@ -232,6 +255,28 @@
       _filterState.sort = sortSel.value;
       renderFiltered();
     });
+
+    var searchEl = document.getElementById('bw-search-q');
+    var searchTimer = null;
+    if (searchEl) {
+      searchEl.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () {
+          _filterState.search = searchEl.value.trim().toLowerCase();
+          renderFiltered();
+        }, 180);
+      });
+    }
+
+    var langBtn = document.getElementById('bw-lang-btn');
+    if (langBtn) {
+      langBtn.addEventListener('click', function () {
+        _lang = (_lang === 'zh') ? 'en' : 'zh';
+        langBtn.textContent = _lang === 'zh' ? '中' : 'EN';
+        langBtn.classList.toggle('is-en', _lang === 'en');
+        renderFiltered();
+      });
+    }
 
     var createBtn = document.getElementById('bw-create-btn');
     if (createBtn) createBtn.addEventListener('click', openCreateDrawer);
