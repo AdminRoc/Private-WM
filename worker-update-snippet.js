@@ -17,8 +17,8 @@ export default {
     // --- 你的专属跳转清单 ---
     const redirectMap = {
       // 主域名与氏族
-      "qiankun.war-frame.com": "https://qcnye09jdqm2.feishu.cn/docx/0C1ddc4kOoVJCOx4520C3r3znEf",
-      "clan.war-frame.com":    "https://qcnye09jdqm2.feishu.cn/docx/0C1ddc4kOoVJCOx4520C3r3znEf",
+      "qiankun.war-frame.com": "https://qcnye09jdqm2.feishu.cn/docx/OC1ddc4kOoVJCOx452Oc3r3znEf",
+      "clan.war-frame.com":    "https://qcnye09jdqm2.feishu.cn/docx/OC1ddc4kOoVJCOx452Oc3r3znEf",
 
       // 攻略/交易/计算器/文档（合并跳转）
       "trade.war-frame.com":"https://qcnye09jdqm2.feishu.cn/docx/XznXdm7N8oHeHLxMJgQcOXQJnuh",
@@ -27,7 +27,7 @@ export default {
 
       // 独立模块
       "rule.war-frame.com":  "https://qcnye09jdqm2.feishu.cn/docx/XIJNdmlLAobtRhxRYy7cvRbOnBb",
-      "csc.war-frame.com":   "https://qcnye09jdqm2.feishu.cn/docx/LC0xdSJsCo5Oqhxkwoqc8FoAnUb",
+      "csc.war-frame.com":   "https://qcnye09jdqm2.feishu.cn/docx/LC0xdSJsCo50qhxkwoqc8FoAnUb",
       "lh.war-frame.com":    "https://space.bilibili.com/36873261",
       "dojo.war-frame.com":  "https://space.bilibili.com/91933543",
       "fy.war-frame.com":    "https://browse.wf/glyphs",
