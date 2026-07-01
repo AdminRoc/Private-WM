@@ -527,7 +527,7 @@ input, button, select { font-family: var(--f-main); }
   transition: max-height .38s cubic-bezier(.22,.68,0,1.1), opacity .28s ease;
   opacity: 0;
 }
-.bw-order-detail.is-open { max-height: 400px; opacity: 1; }
+.bw-order-detail.is-open { max-height: 700px; opacity: 1; }
 .bw-detail-inner {
   padding: .65rem .85rem .75rem;
   border-top: 1px solid var(--c-gold-faint);
@@ -720,6 +720,40 @@ input[type=text].bw-drawer-input { padding-right: .82rem; }
 .bw-drawer-msg { font-size: .83rem; text-align: center; min-height: 1.2rem; transition: color .2s ease; }
 .bw-drawer-msg.ok  { color: var(--c-buy); }
 .bw-drawer-msg.err { color: var(--c-sell); }
+
+/* ─── 交易统计仪表盘 ─── */
+.bw-detail-divider {
+  grid-column: 1/-1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--c-gold-faint), transparent);
+  margin: .3rem 0;
+}
+.bw-stats-wrap { grid-column: 1/-1; }
+.bw-stats-loading, .bw-stats-empty {
+  color: var(--c-text2); font-size: .8rem; text-align: center; padding: .6rem 0;
+}
+.bw-stats-chart-head {
+  display: flex; align-items: center; gap: .8rem;
+  margin-bottom: .45rem; flex-wrap: wrap;
+}
+.bw-stats-title { font-size: .8rem; font-weight: 700; color: var(--c-white); letter-spacing: .04em; }
+.bw-stats-legend {
+  display: flex; align-items: center; gap: .3rem;
+  font-size: .72rem; color: var(--c-text2);
+}
+.bw-stats-leg-line { display: inline-block; width: 16px; height: 2px; background: #d4a84a; border-radius: 1px; }
+.bw-stats-leg-bar  { display: inline-block; width: 10px; height: 8px; background: rgba(80,160,240,.45); border-radius: 2px; }
+.bw-stats-leg-ref  { display: inline-block; width: 16px; height: 2px; background: #3dd6a0; border-radius: 1px; border-top: 1px dashed #3dd6a0; }
+.bw-stats-svg {
+  width: 100%; max-height: 170px; display: block; overflow: visible;
+}
+/* SVG 内部元素 via CSS */
+.bw-chart-grid  { stroke: rgba(185,142,52,.12); stroke-width: 1; }
+.bw-chart-axis  { stroke: rgba(185,142,52,.35); stroke-width: 1; }
+.bw-chart-line  { fill: none; stroke: #d4a84a; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.bw-chart-fill  { fill: url(#chartFill); }
+.bw-chart-ref   { stroke: #3dd6a0; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.bw-chart-vol   { fill: rgba(80,160,240,.32); }
+.bw-chart-label { font-size: 9px; fill: rgba(180,210,240,.55); font-family: var(--f-main); }
 
 /* ─── Keyframes ─── */
 @keyframes bwEnterUp {

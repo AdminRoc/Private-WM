@@ -421,20 +421,122 @@ ${o.mod_rank!==undefined?'<div class="bw-detail-row"><div class="bw-detail-label
 <div class="bw-detail-row"><div class="bw-detail-label">最后更新</div><div class="bw-detail-val">${ago(o.last_update)}</div></div>`;
 
   if (o._slug) {
-    try {
-      const j = await apiFetch('/item/' + encodeURIComponent(o._slug));
-      const it = j.data;
+    /* 物品详情 + 统计图表并行加载 */
+    const chartPlaceholder = '<div class="bw-stats-wrap" id="bw-stats-' + id + '"><div class="bw-stats-loading">加载交易统计…</div></div>';
+    inner.insertAdjacentHTML('beforeend', '<div class="bw-detail-divider"></div>' + chartPlaceholder);
+
+    const [detailResult, statsResult] = await Promise.allSettled([
+      apiFetch('/item/' + encodeURIComponent(o._slug)),
+      apiFetch('/stats/' + encodeURIComponent(o._slug)),
+    ]);
+
+    if (detailResult.status === 'fulfilled') {
+      const it = detailResult.value.data;
       if (it) {
-        const desc = (it.description || '').replace(/<[^>]+>/g, '').slice(0, 200);
+        const desc = (it.description || '').replace(/<[^>]+>/g, '').slice(0, 180);
         [
           it.rarity ? '<div class="bw-detail-row"><div class="bw-detail-label">稀有度</div><div class="bw-detail-val">'+it.rarity+'</div></div>' : '',
           it.trading_tax !== undefined ? '<div class="bw-detail-row"><div class="bw-detail-label">交易税</div><div class="bw-detail-val">'+it.trading_tax+'</div></div>' : '',
-          it.tags?.length ? '<div class="bw-detail-row"><div class="bw-detail-label">标签</div><div class="bw-detail-val">'+it.tags.join(' · ')+'</div></div>' : '',
+          it.tags && it.tags.length ? '<div class="bw-detail-row"><div class="bw-detail-label">标签</div><div class="bw-detail-val">'+it.tags.join(' · ')+'</div></div>' : '',
           desc ? '<div class="bw-detail-desc">'+desc+'</div>' : '',
-        ].forEach(function(h) { if (h) inner.insertAdjacentHTML('beforeend', h); });
+        ].forEach(function(h) { if (h) inner.querySelector('.bw-stats-wrap').insertAdjacentHTML('beforebegin', h); });
       }
-    } catch {}
+    }
+
+    const statsEl = document.getElementById('bw-stats-' + id);
+    if (statsEl) {
+      if (statsResult.status === 'fulfilled' && statsResult.value.data && statsResult.value.data.length > 1) {
+        statsEl.innerHTML = buildStatsChart(statsResult.value.data, _avgCache[o._slug]);
+      } else {
+        statsEl.innerHTML = '<div class="bw-stats-empty">暂无足够统计数据</div>';
+      }
+    }
   }
+}
+
+/* ──────────────────────────────────────────────────────────
+   交易统计 SVG 图表
+─────────────────────────────────────────────────────────── */
+function buildStatsChart(points, avgData) {
+  const W = 560, H = 160, PL = 44, PR = 44, PT = 18, PB = 28;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  const prices  = points.map(function(p) { return p.avg; }).filter(Boolean);
+  const volumes = points.map(function(p) { return p.volume; });
+  const minP = Math.max(0, Math.min.apply(null, prices) * 0.9);
+  const maxP = Math.max.apply(null, prices) * 1.08;
+  const maxV = Math.max.apply(null, volumes) || 1;
+
+  function xOf(i)   { return PL + (i / (points.length - 1)) * cW; }
+  function yOfP(v)  { return PT + cH - ((v - minP) / (maxP - minP)) * cH; }
+  function yOfV(v)  { return PT + cH - (v / maxV) * cH * 0.38; }
+
+  /* 折线路径 */
+  const linePts = points.map(function(p, i) { return (i===0?'M':'L') + xOf(i).toFixed(1) + ',' + yOfP(p.avg||0).toFixed(1); });
+  /* 填充路径 */
+  const fillPts = linePts.slice() + ' L' + xOf(points.length-1).toFixed(1)+',' + (PT+cH) + ' L'+PL+','+(PT+cH)+' Z';
+
+  /* 均价参考线 */
+  const avgRef = avgData && avgData.avg ? yOfP(avgData.avg).toFixed(1) : null;
+
+  /* X 轴标签（每 ~15 天显示一个） */
+  const step = Math.max(1, Math.floor(points.length / 6));
+  const xLabels = points.map(function(p, i) {
+    if (i % step !== 0 && i !== points.length - 1) return '';
+    const d = p.day.slice(5); // MM-DD
+    return '<text x="' + xOf(i).toFixed(1) + '" y="' + (PT+cH+14) + '" class="bw-chart-label" text-anchor="middle">' + d + '</text>';
+  }).join('');
+
+  /* Y 轴标签（价格，左） */
+  const yTicks = 3;
+  const yLabels = Array.from({length: yTicks+1}, function(_, i) {
+    const v = minP + (maxP - minP) * i / yTicks;
+    const y = yOfP(v).toFixed(1);
+    return '<text x="' + (PL-5) + '" y="' + y + '" class="bw-chart-label" text-anchor="end" dominant-baseline="middle">' + Math.round(v) + '</text>';
+  }).join('');
+
+  /* 成交量柱（右轴，半透明蓝色） */
+  const barW = Math.max(1, (cW / points.length) * 0.6);
+  const bars = points.map(function(p, i) {
+    const bh = (p.volume / maxV) * cH * 0.38;
+    const by = PT + cH - bh;
+    return '<rect x="' + (xOf(i) - barW/2).toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" class="bw-chart-vol"/>';
+  }).join('');
+
+  /* 右轴量标签 */
+  const volLabel = '<text x="' + (W-PR+5) + '" y="' + (PT+cH*0.62) + '" class="bw-chart-label" text-anchor="start">' + maxV + '</text>';
+
+  return `<div class="bw-stats-chart-head">
+  <span class="bw-stats-title">近 90 天交易趋势</span>
+  <span class="bw-stats-legend"><span class="bw-stats-leg-line"></span>均价</span>
+  <span class="bw-stats-legend"><span class="bw-stats-leg-bar"></span>成交量</span>
+  ${avgRef ? '<span class="bw-stats-legend"><span class="bw-stats-leg-ref"></span>当前均价</span>' : ''}
+</div>
+<svg class="bw-stats-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d4a84a" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#d4a84a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- 网格线 -->
+  ${Array.from({length:yTicks+1},function(_,i){const y=yOfP(minP+(maxP-minP)*i/yTicks).toFixed(1);return '<line x1="'+PL+'" y1="'+y+'" x2="'+(W-PR)+'" y2="'+y+'" class="bw-chart-grid"/>';}).join('')}
+  <!-- 成交量柱 -->
+  ${bars}
+  <!-- 均价参考线 -->
+  ${avgRef ? '<line x1="'+PL+'" y1="'+avgRef+'" x2="'+(W-PR)+'" y2="'+avgRef+'" class="bw-chart-ref"/>' : ''}
+  <!-- 填充 -->
+  <path d="${fillPts}" class="bw-chart-fill"/>
+  <!-- 折线 -->
+  <path d="${linePts.join(' ')}" class="bw-chart-line"/>
+  <!-- 轴 -->
+  <line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT+cH}" class="bw-chart-axis"/>
+  <line x1="${PL}" y1="${PT+cH}" x2="${W-PR}" y2="${PT+cH}" class="bw-chart-axis"/>
+  <!-- 标签 -->
+  ${yLabels}
+  ${xLabels}
+  ${volLabel}
+</svg>`;
 }
 
 /* ──────────────────────────────────────────────────────────

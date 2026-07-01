@@ -405,6 +405,47 @@ async function handleWmPrice(request, env, slug) {
   }
 }
 
+// GET /api/wm/stats/:slug —— 物品交易统计（近90天均价趋势 + 成交量）
+async function handleWmStats(request, env, slug) {
+  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+
+  const cacheKey = 'stats_' + slug;
+  const cached   = await env.BW_SESSIONS.get(cacheKey);
+  if (cached) { try { return jsonResponse({ data: JSON.parse(cached) }); } catch {} }
+
+  try {
+    /* WM v1 统计接口（v2 尚无等效端点） */
+    const resp = await fetch(
+      `${WM_API}/v1/items/${encodeURIComponent(slug)}/statistics`,
+      { headers: { 'Platform': 'pc', 'Language': 'en', 'Accept': 'application/json' } }
+    );
+    if (!resp.ok) return jsonResponse({ data: null });
+    const json = await resp.json();
+    const raw  = (json.payload && json.payload.statistics_closed) || [];
+
+    /* 只保留近 90 天 sell 条目，按日期聚合（WM 可能返回重复日） */
+    const cutoff = Date.now() - 90 * 86400 * 1000;
+    const dayMap = {};
+    raw.filter(r => r.order_type === 'sell' && new Date(r.datetime).getTime() >= cutoff)
+       .forEach(r => {
+         const day = r.datetime.slice(0, 10);
+         if (!dayMap[day]) dayMap[day] = { day, sum: 0, volume: 0, count: 0, median: 0 };
+         dayMap[day].sum    += (r.avg_price || 0) * (r.volume || 1);
+         dayMap[day].volume += r.volume || 1;
+         dayMap[day].count  += 1;
+         dayMap[day].median  = r.median || dayMap[day].median;
+       });
+    const points = Object.values(dayMap)
+      .map(d => ({ day: d.day, avg: d.volume > 0 ? Math.round(d.sum / d.volume) : 0, volume: d.volume, median: d.median }))
+      .sort((a, b) => a.day.localeCompare(b.day));
+
+    await env.BW_SESSIONS.put(cacheKey, JSON.stringify(points), { expirationTtl: 1800 });
+    return jsonResponse({ data: points });
+  } catch (e) {
+    return jsonResponse({ data: null });
+  }
+}
+
 // GET /api/wm/item/:slug —— 物品详情
 async function handleWmItemDetail(request, env, slug) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
@@ -494,6 +535,9 @@ export default {
 
     const priceMatch = p.match(/^\/api\/wm\/price\/([^/]+)$/);
     if (priceMatch && request.method === 'GET') return handleWmPrice(request, env, priceMatch[1]);
+
+    const statsMatch = p.match(/^\/api\/wm\/stats\/([^/]+)$/);
+    if (statsMatch && request.method === 'GET') return handleWmStats(request, env, statsMatch[1]);
 
     const itemDetailMatch = p.match(/^\/api\/wm\/item\/([^/]+)$/);
     if (itemDetailMatch && request.method === 'GET') return handleWmItemDetail(request, env, itemDetailMatch[1]);
