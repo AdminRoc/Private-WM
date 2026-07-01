@@ -146,7 +146,7 @@ async function loadOrders() {
     const itemObj = slug ? _items.find(function(i) { return (i.url_name||i.slug||i.id) === slug; }) : null;
     /* v2 API 用 camelCase，统一别名到 snake_case 供渲染层使用 */
     return Object.assign({}, o, {
-      order_type:  o.order_type  || o.orderType  || 'sell',
+      order_type:  o.order_type  || o.orderType  || o.type || 'sell',
       last_update: o.last_update || o.lastUpdate  || o.updatedAt || '',
       creation_date: o.creation_date || o.creationDate || o.createdAt || '',
       mod_rank:    o.mod_rank    !== undefined ? o.mod_rank : (o.modRank !== undefined ? o.modRank : undefined),
