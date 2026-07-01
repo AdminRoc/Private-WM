@@ -247,6 +247,37 @@ input, button, select { font-family: var(--f-main); }
 .bw-alert-f-btn.active   { background: rgba(232,146,74,.18); border-color: rgba(232,146,74,.8); color: #f0a866; }
 .bw-alert-f-btn.active .bw-f-dot-warn   { box-shadow: 0 0 6px rgba(232,146,74,.9); }
 
+/* 扫光动画（有数据时） */
+.bw-special-f-btn.has-data,
+.bw-alert-f-btn.has-data {
+  position: relative; overflow: hidden;
+}
+.bw-special-f-btn.has-data::after,
+.bw-alert-f-btn.has-data::after {
+  content: '';
+  position: absolute; top: 0; left: -60%;
+  width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(212,168,74,.55), transparent);
+  border-radius: inherit;
+  animation: bwSweepGold 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.bw-alert-f-btn.has-data::after {
+  background: linear-gradient(90deg, transparent, rgba(220,60,60,.5), transparent);
+  animation-name: bwSweepRed;
+  animation-duration: 4s;
+}
+@keyframes bwSweepGold {
+  0%      { left: -60%; opacity: 0; }
+  10%     { opacity: 1; }
+  60%,100%{ left: 130%; opacity: 0; }
+}
+@keyframes bwSweepRed {
+  0%      { left: -60%; opacity: 0; }
+  10%     { opacity: 1; }
+  65%,100%{ left: 130%; opacity: 0; }
+}
+
 /* 价格区间 */
 .bw-price-range { display: flex; align-items: center; gap: .28rem; }
 .bw-range-input {
@@ -410,6 +441,16 @@ input, button, select { font-family: var(--f-main); }
   font-size: .76rem; color: var(--c-text2);
 }
 .bw-batch-count-label strong { color: var(--c-white); font-weight: 700; }
+
+/* 批量操作类型标签 */
+.bw-batch-type-tag {
+  display: inline-block; font-size: .65rem; font-weight: 800; letter-spacing: .08em;
+  padding: .04rem .35rem; border-radius: 3px; text-transform: uppercase;
+  background: rgba(185,142,52,.14); color: var(--c-gold-bright);
+  border: 1px solid rgba(185,142,52,.3); vertical-align: middle;
+}
+.bw-batch-type-tag.is-sell { background: rgba(203,74,158,.14); color: var(--c-sell); border-color: rgba(203,74,158,.3); }
+.bw-batch-type-tag.is-buy  { background: rgba(32,158,112,.14); color: var(--c-buy);  border-color: rgba(32,158,112,.3); }
 
 .bw-batch-controls {
   display: flex; align-items: flex-end; gap: .55rem; flex-wrap: wrap;

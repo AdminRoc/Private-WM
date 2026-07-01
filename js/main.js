@@ -346,13 +346,12 @@ function filtered() {
     if (_priceMin > 0 && price < _priceMin) return false;
     if (_priceMax < Infinity && price > _priceMax) return false;
     if (q && name.indexOf(q) === -1 && nameEn.indexOf(q) === -1) return false;
-    if (_filterSpecial) {
+    if (_filterSpecial || _filterAlert) {
       const c = _avgCache[o._slug];
-      if (!c || !c.special) return false;
-    }
-    if (_filterAlert) {
-      const c = _avgCache[o._slug];
-      if (!c || c.special || c.avg === null || !(o.platinum < c.avg * 1.5)) return false;
+      let pass = false;
+      if (_filterSpecial && c && c.special) pass = true;
+      if (_filterAlert  && c && c.avg !== null && c.avg !== undefined && o.platinum < c.avg * 1.5) pass = true;
+      if (!pass) return false;
     }
     return true;
   });
@@ -470,6 +469,18 @@ function render() {
   if (tot) tot.textContent = _orders.length;
 
   document.getElementById('bw-batch-count').textContent = list.length;
+  const typeTag = document.getElementById('bw-batch-type-label');
+  if (typeTag) {
+    typeTag.textContent = _typeF === 'sell' ? '出售' : _typeF === 'buy' ? '求购' : '全部';
+    typeTag.className   = 'bw-batch-type-tag ' + (_typeF === 'sell' ? 'is-sell' : _typeF === 'buy' ? 'is-buy' : '');
+  }
+
+  /* 扫光动画：有稀缺/警报数据时激活 */
+  const allOrders = _orders;
+  const hasSpecial = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.special; });
+  const hasAlert   = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.avg !== null && c.avg !== undefined && o.platinum < c.avg * 1.5; });
+  document.getElementById('bw-filter-special')?.classList.toggle('has-data', hasSpecial);
+  document.getElementById('bw-filter-alert')  ?.classList.toggle('has-data', hasAlert);
 
   updateAlertSection(list);
   loadMissingAvg(list);
