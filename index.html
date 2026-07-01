@@ -17,8 +17,15 @@
       <span class="bw-brand-divider"></span>
       <span class="bw-brand-sub">BOSS TOOL</span>
     </div>
+    <nav class="bw-nav" aria-label="工具导航">
+      <a href="https://wfspeed.run/worldstate.html" target="_blank" rel="noopener" class="bw-nav-link" data-label="世界状态">世界状态</a>
+      <a href="https://wfspeed.run/eelog.html"      target="_blank" rel="noopener" class="bw-nav-link" data-label="日志分析">日志分析</a>
+      <a href="https://wfspeed.run/item.html"        target="_blank" rel="noopener" class="bw-nav-link" data-label="来源查询">来源查询</a>
+      <a href="https://wfspeed.run/"                 target="_blank" rel="noopener" class="bw-nav-link" data-label="竞速榜单">竞速榜单</a>
+      <a href="https://fanyi.baidu.com/"             target="_blank" rel="noopener" class="bw-nav-link" data-label="百度翻译">百度翻译</a>
+    </nav>
     <div class="bw-header-right">
-      <button class="bw-logout-btn" id="bw-logout-btn" title="退出登录">退出</button>
+      <button class="bw-logout-btn" id="bw-logout-btn" title="退出登录">登出账号</button>
     </div>
   </header>
 
@@ -126,6 +133,11 @@
         <div class="bw-batch-header">
           <span class="bw-batch-title">批量编辑</span>
           <span class="bw-batch-count-label">当前筛选 <strong id="bw-batch-count">0</strong> 条 · <span id="bw-batch-type-label" class="bw-batch-type-tag">全部</span></span>
+          <div class="bw-batch-type-pills" title="批量操作范围">
+            <button class="bw-batch-type-pill active" data-bt="all">全部</button>
+            <button class="bw-batch-type-pill" data-bt="sell">出售</button>
+            <button class="bw-batch-type-pill" data-bt="buy">求购</button>
+          </div>
         </div>
         <div class="bw-batch-controls">
           <div class="bw-batch-item">
@@ -159,19 +171,6 @@
           <span class="bw-batch-prog-text" id="bw-batch-prog-text">0 / 0</span>
         </div>
       </div>
-    </div>
-
-    <!-- 价格警报区 -->
-    <div class="bw-alert-section" id="bw-alert-section" style="display:none">
-      <div class="bw-alert-header">
-        <span class="bw-alert-indicator"></span>
-        <span class="bw-alert-title">价格警报</span>
-        <span class="bw-alert-sub" id="bw-alert-count"></span>
-        <button class="bw-alert-close" id="bw-alert-close" title="关闭">
-          <svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <div id="bw-alert-list" class="bw-order-list bw-alert-list"></div>
     </div>
 
     <!-- 价格警报浮动按钮（有警报时出现） -->

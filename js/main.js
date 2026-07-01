@@ -16,6 +16,7 @@ let _typeF     = 'all';
 let _visF      = 'all';
 let _filterSpecial = false;
 let _filterAlert   = false;
+let _batchType     = 'all';   // 批量操作类型：all / sell / buy
 let _sort      = 'updated_desc';
 let _priceMin  = 0;
 let _priceMax  = Infinity;
@@ -24,7 +25,6 @@ let _mult      = 2;
 let _avgCache  = {};
 let _openRow   = null;
 let _openEdit  = null;
-let _alertClosed = false;
 
 /* 在线状态维持 */
 let _wmStatus      = 'offline';   // 当前实际状态
@@ -237,6 +237,31 @@ function renderProfile(sess) {
       <span class="bw-status-timer" id="bw-status-timer"></span>
     </div>
   </div>
+</div>
+<div class="bw-profile-panel" id="bw-profile-panel">
+  <span class="bw-panel-corner-tl"></span>
+  <div class="bw-panel-grid">
+    <div class="bw-panel-stat">
+      <span class="bw-panel-label">出售订单</span>
+      <span class="bw-panel-val sell" id="bw-panel-sell">—</span>
+    </div>
+    <div class="bw-panel-stat">
+      <span class="bw-panel-label">求购订单</span>
+      <span class="bw-panel-val buy" id="bw-panel-buy">—</span>
+    </div>
+    <div class="bw-panel-stat">
+      <span class="bw-panel-label">均价覆盖</span>
+      <span class="bw-panel-val" id="bw-panel-coverage">—</span>
+    </div>
+    <div class="bw-panel-stat">
+      <span class="bw-panel-label">价格警报</span>
+      <span class="bw-panel-val warn" id="bw-panel-alerts">—</span>
+    </div>
+    <div class="bw-panel-ticker">
+      <span class="bw-panel-ticker-dot"></span>
+      <span class="bw-panel-ticker-text" id="bw-panel-ticker">正在同步数据…</span>
+    </div>
+  </div>
 </div>`;
   initStatusCtrl();
 }
@@ -350,7 +375,7 @@ function filtered() {
       const c = _avgCache[o._slug];
       let pass = false;
       if (_filterSpecial && c && c.special) pass = true;
-      if (_filterAlert  && c && c.avg !== null && c.avg !== undefined && o.platinum < c.avg * 1.5) pass = true;
+      if (_filterAlert  && c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25) pass = true;
       if (!pass) return false;
     }
     return true;
@@ -398,7 +423,7 @@ function mkRow(o) {
   const pts      = o.mod_rank !== undefined ? ' 阶 ' + o.mod_rank : '';
   const perTrade = (o.quantity_in_set && o.quantity_in_set > 1) ? '×' + o.quantity_in_set + '/批' : '';
   const c        = _avgCache[o._slug];
-  const isAlert  = c && o.platinum < c.avg * 1.5;
+  const isAlert  = c && o.platinum <= c.avg * 1.25;
 
   const div = document.createElement('div');
   div.className = 'bw-order-row' + (isHidden ? ' bw-order-hidden' : '') + (isAlert ? ' bw-alert-row' : '');
@@ -462,11 +487,34 @@ function render() {
   if (buyList.length === 0) buyEl.innerHTML = '<div class="bw-empty">暂无求购订单</div>';
   buyList.forEach(function(o, i) { const row = mkRow(o); row.style.animationDelay = (i*28)+'ms'; buyEl.appendChild(row); });
 
+  const allSell = _orders.filter(function(o){ return (o.order_type||o.orderType) === 'sell'; });
+  const allBuy  = _orders.filter(function(o){ return (o.order_type||o.orderType) !== 'sell'; });
+  const alertCnt = _orders.filter(function(o){
+    const c = _avgCache[o._slug];
+    return c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25;
+  }).length;
+  const covCnt  = Object.keys(_avgCache).filter(function(k){ return _avgCache[k] && _avgCache[k].avg !== null; }).length;
+  const covPct  = _orders.length > 0 ? Math.round(covCnt / _orders.length * 100) : 0;
+
   document.getElementById('bw-sell-count').textContent = '(' + sellList.length + ')';
   document.getElementById('bw-buy-count').textContent  = '(' + buyList.length + ')';
   document.getElementById('bw-order-stats').textContent = '共 ' + _orders.length + ' 条 · 显示 ' + list.length + ' 条';
   const tot = document.getElementById('bw-total-count');
   if (tot) tot.textContent = _orders.length;
+
+  /* 更新 profile panel 统计 */
+  const ps = document.getElementById('bw-panel-sell');
+  const pb = document.getElementById('bw-panel-buy');
+  const pc = document.getElementById('bw-panel-coverage');
+  const pa = document.getElementById('bw-panel-alerts');
+  const pt = document.getElementById('bw-panel-ticker');
+  if (ps) ps.textContent = allSell.length;
+  if (pb) pb.textContent = allBuy.length;
+  if (pc) pc.textContent = covPct + '%';
+  if (pa) pa.textContent = alertCnt;
+  if (pt) pt.textContent = alertCnt > 0
+    ? alertCnt + ' 条订单价格低于均价 1.25×'
+    : '所有订单价格正常';
 
   document.getElementById('bw-batch-count').textContent = list.length;
   const typeTag = document.getElementById('bw-batch-type-label');
@@ -478,7 +526,7 @@ function render() {
   /* 扫光动画：有稀缺/警报数据时激活 */
   const allOrders = _orders;
   const hasSpecial = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.special; });
-  const hasAlert   = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.avg !== null && c.avg !== undefined && o.platinum < c.avg * 1.5; });
+  const hasAlert   = allOrders.some(function(o) { const c = _avgCache[o._slug]; return c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25; });
   document.getElementById('bw-filter-special')?.classList.toggle('has-data', hasSpecial);
   document.getElementById('bw-filter-alert')  ?.classList.toggle('has-data', hasAlert);
 
@@ -513,7 +561,7 @@ function loadMissingAvg(list) {
       document.querySelectorAll('.bw-order-row[data-slug="' + slug + '"]').forEach(function(row) {
         const o = _orders.find(function(x) { return x.id === row.dataset.id; });
         if (data.special) row.classList.add('bw-special-row');
-        if (o && data.avg !== null && o.platinum < data.avg * 1.5) row.classList.add('bw-alert-row');
+        if (o && data.avg !== null && o.platinum < data.avg * 1.25) row.classList.add('bw-alert-row');
       });
       updateAlertBadges();
     });
@@ -521,23 +569,17 @@ function loadMissingAvg(list) {
 }
 
 /* ──────────────────────────────────────────────────────────
-   价格警报
+   价格警报 FAB（只更新计数，不再置顶单独显示）
 ─────────────────────────────────────────────────────────── */
 function updateAlertSection(visibleList) {
-  if (_alertClosed) return;
-  const alertOrders = visibleList.filter(function(o) {
-    const c = _avgCache[o._slug]; return c && o.platinum < c.avg * 1.5;
-  });
-  const sec = document.getElementById('bw-alert-section');
+  const count = _orders.filter(function(o) {
+    const c = _avgCache[o._slug];
+    return c && c.avg !== null && c.avg !== undefined && o.platinum <= c.avg * 1.25;
+  }).length;
   const fab = document.getElementById('bw-alert-fab');
   const n   = document.getElementById('bw-alert-fab-n');
-  const cnt = document.getElementById('bw-alert-count');
-  if (alertOrders.length > 0) {
-    cnt.textContent = '（' + alertOrders.length + ' 条订单价格偏低）';
-    sec.style.display = ''; fab.style.display = ''; n.textContent = alertOrders.length;
-    const al = document.getElementById('bw-alert-list'); al.innerHTML = '';
-    alertOrders.forEach(function(o) { al.appendChild(mkRow(o)); });
-  } else { sec.style.display = 'none'; fab.style.display = 'none'; }
+  if (fab) fab.style.display = count > 0 ? '' : 'none';
+  if (n)   n.textContent = count;
 }
 
 function updateAlertBadges() { updateAlertSection(filtered()); }
@@ -733,9 +775,9 @@ function refreshPriceHint(slug, price) {
   const c = _avgCache[slug];
   if (!c || !price) { hint.textContent = ''; return; }
   const target = c.avg * _mult;
-  if (price < c.avg * 1.5) {
+  if (price <= c.avg * 1.25) {
     hint.className = 'bw-drawer-price-hint alert';
-    hint.textContent = '⚠ 价格偏低！均价 ' + c.avg + 'p，目标 ' + Math.round(target) + 'p';
+    hint.textContent = '价格偏低！均价 ' + c.avg + 'p，目标 ' + Math.round(target) + 'p';
   } else if (price < target) {
     hint.className = 'bw-drawer-price-hint warn';
     hint.textContent = '均价 ' + c.avg + 'p，目标 ' + Math.round(target) + 'p（当前低于倍率目标）';
@@ -1134,33 +1176,45 @@ function bindEvents() {
   });
 
   /* 批量操作 */
+  function filteredForBatch() {
+    const base = filtered();
+    if (_batchType === 'all') return base;
+    return base.filter(function(o){ return (o.order_type||o.orderType) === _batchType; });
+  }
   document.getElementById('bw-batch-price-btn')?.addEventListener('click', async function() {
     const val = +document.getElementById('bw-batch-price').value; if (!val||val<1) return;
-    await batchOp(filtered(), function() { return { platinum: val }; });
+    await batchOp(filteredForBatch(), function() { return { platinum: val }; });
   });
   document.getElementById('bw-batch-qty-btn')?.addEventListener('click', async function() {
     const val = +document.getElementById('bw-batch-qty').value; if (!val||val<1) return;
-    await batchOp(filtered(), function() { return { quantity: val }; });
+    await batchOp(filteredForBatch(), function() { return { quantity: val }; });
   });
   document.getElementById('bw-batch-mult-btn')?.addEventListener('click', async function() {
     const multInput = document.getElementById('bw-batch-mult-input');
     const batchMult = multInput ? (parseFloat(multInput.value) || _mult) : _mult;
-    await batchOp(filtered(), function(o) {
+    await batchOp(filteredForBatch(), function(o) {
       const c = _avgCache[o._slug]; if (!c) return null;
       const p = Math.round(c.avg * batchMult);
       return p >= 1 ? { platinum: p } : null;
     });
   });
 
-  /* 价格警报 FAB */
+  /* 价格警报 FAB：点击即激活警报筛选 */
   document.getElementById('bw-alert-fab')?.addEventListener('click', function() {
-    _alertClosed = false;
-    document.getElementById('bw-alert-section').scrollIntoView({ behavior: 'smooth' });
+    _filterAlert = true;
+    const btn = document.getElementById('bw-filter-alert');
+    if (btn) { btn.dataset.active = '1'; btn.classList.add('active'); }
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
-  document.getElementById('bw-alert-close')?.addEventListener('click', function() {
-    _alertClosed = true;
-    document.getElementById('bw-alert-section').style.display = 'none';
-    document.getElementById('bw-alert-fab').style.display = 'none';
+
+  /* 批量操作类型 pills */
+  document.querySelectorAll('.bw-batch-type-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      document.querySelectorAll('.bw-batch-type-pill').forEach(function(p){ p.classList.remove('active'); });
+      pill.classList.add('active');
+      _batchType = pill.dataset.bt;
+    });
   });
 
   setupItemSearch();
@@ -1175,6 +1229,7 @@ async function main() {
   _session = sess;
   renderProfile(sess);
   bindEvents();
+  apiFetch('/refresh-items', { method: 'POST' }).catch(function(){});  // 登录后自动刷新物品缓存
   await loadItems();
   preloadAvgPrices();  // 后台预加载，不阻塞订单渲染
   try { await loadOrders(); }
