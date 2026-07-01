@@ -243,7 +243,8 @@ function wmJsonProxy(resp, text) {
 async function handleWmOrders(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
-    const resp = await wmFetch(env, `/v2/orders/user/${WM_SLUG}?include=item`, {});
+    // v1 profile orders 端点直接内联物品名称，v2 只返回 itemId
+    const resp = await wmFetch(env, `/v1/profile/${WM_SLUG}/orders`, {});
     return wmJsonProxy(resp, await resp.text());
   } catch (e) {
     return jsonResponse({ error: 'WM API 错误：' + e.message }, 502);
