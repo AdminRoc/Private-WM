@@ -25,13 +25,50 @@
 
   <main class="page-wrap bw-wrap">
     <section class="bw-profile-card" id="bw-profile-card">
-      <div class="bw-skel-row" style="width:120px;height:120px;border-radius:50%;"></div>
-      <div class="bw-profile-info">
+      <div class="bw-skel-row" style="width:120px;height:120px;border-radius:50%;flex-shrink:0"></div>
+      <div class="bw-profile-info" style="flex:1">
         <div class="bw-skel-row" style="width:160px;height:22px;margin-bottom:.6rem;"></div>
         <div class="bw-skel-row" style="width:240px;height:16px;"></div>
       </div>
     </section>
 
+    <!-- 筛选工具栏 -->
+    <div class="bw-toolbar" id="bw-toolbar">
+      <div class="bw-toolbar-filters">
+        <div class="bw-filter-group">
+          <button class="bw-type-pill active" data-type="all">全部</button>
+          <button class="bw-type-pill" data-type="sell">出售</button>
+          <button class="bw-type-pill" data-type="buy">求购</button>
+        </div>
+        <div class="bw-filter-group">
+          <button class="bw-vis-f-btn active" data-vis="all">全部</button>
+          <button class="bw-vis-f-btn" data-vis="visible">显示中</button>
+          <button class="bw-vis-f-btn" data-vis="hidden">隐藏中</button>
+        </div>
+        <div class="bw-price-range">
+          <input type="number" id="bw-price-min" class="bw-range-input" placeholder="最低价" min="0">
+          <span class="bw-range-sep">—</span>
+          <input type="number" id="bw-price-max" class="bw-range-input" placeholder="最高价" min="0">
+          <span class="bw-range-unit">p</span>
+        </div>
+        <select id="bw-sort-sel" class="bw-sort-sel">
+          <option value="updated_desc">最新更新</option>
+          <option value="updated_asc">最早更新</option>
+          <option value="price_asc">价格升序</option>
+          <option value="price_desc">价格降序</option>
+          <option value="created_desc">最新挂单</option>
+          <option value="created_asc">最早挂单</option>
+          <option value="qty_desc">数量降序</option>
+          <option value="qty_asc">数量升序</option>
+        </select>
+      </div>
+      <div class="bw-toolbar-right">
+        <span class="bw-order-stats" id="bw-order-stats"></span>
+        <button class="bw-create-btn" id="bw-create-btn">+ 创建挂单</button>
+      </div>
+    </div>
+
+    <!-- 订单列表 -->
     <section class="bw-orders">
       <div class="bw-orders-col">
         <h2 class="bw-col-title bw-col-sell">出售挂单 <span class="bw-col-count" id="bw-sell-count"></span></h2>
@@ -48,8 +85,10 @@
     </section>
   </main>
 
-  <!-- 编辑抽屉 -->
+  <!-- 遮罩（编辑抽屉） -->
   <div id="bw-drawer-overlay" class="bw-drawer-overlay"></div>
+
+  <!-- 编辑抽屉 -->
   <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="编辑挂单">
     <div class="bw-drawer-header">
       <span class="bw-drawer-title" id="bw-drawer-item-name">—</span>
@@ -60,7 +99,7 @@
 
       <div class="bw-drawer-field">
         <label class="bw-drawer-label">可见性</label>
-        <div class="bw-vis-pills" id="bw-drawer-vis-pills">
+        <div class="bw-vis-pills">
           <button class="bw-vis-pill" data-val="true" id="bw-pill-visible">可见</button>
           <button class="bw-vis-pill" data-val="false" id="bw-pill-hidden">隐藏</button>
         </div>
@@ -81,6 +120,13 @@
         </div>
       </div>
 
+      <div class="bw-drawer-field" id="bw-drawer-per-trade-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-drawer-per-trade">每批数量（批量出售，1–6）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-drawer-per-trade" class="bw-drawer-input" min="1" max="6" placeholder="1–6">
+        </div>
+      </div>
+
       <div class="bw-drawer-actions">
         <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-drawer-update">更新</button>
         <button class="bw-drawer-btn bw-drawer-btn-delete" id="bw-drawer-delete">删除挂单</button>
@@ -95,6 +141,84 @@
       </div>
 
       <div class="bw-drawer-msg" id="bw-drawer-msg"></div>
+    </div>
+  </aside>
+
+  <!-- 遮罩（创建抽屉） -->
+  <div id="bw-create-overlay" class="bw-drawer-overlay"></div>
+
+  <!-- 创建挂单抽屉 -->
+  <aside id="bw-create-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="创建挂单">
+    <div class="bw-drawer-header">
+      <span class="bw-drawer-title">创建新挂单</span>
+      <button class="bw-drawer-close" id="bw-create-close" title="关闭">✕</button>
+    </div>
+    <div class="bw-drawer-body">
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label">物品搜索</label>
+        <div class="bw-item-search-wrap">
+          <input type="text" id="bw-create-item-q" class="bw-drawer-input" placeholder="输入中文或英文名称…" autocomplete="off">
+          <input type="hidden" id="bw-create-item-id">
+          <div class="bw-item-dropdown" id="bw-item-dropdown"></div>
+        </div>
+      </div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label">订单类型</label>
+        <div class="bw-vis-pills">
+          <button class="bw-vis-pill active" id="bw-create-type-sell">出售</button>
+          <button class="bw-vis-pill" id="bw-create-type-buy">求购</button>
+        </div>
+      </div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label">可见性</label>
+        <div class="bw-vis-pills">
+          <button class="bw-vis-pill active" id="bw-create-vis-on">可见</button>
+          <button class="bw-vis-pill" id="bw-create-vis-off">隐藏</button>
+        </div>
+      </div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label" for="bw-create-price">价格（铂金）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-create-price" class="bw-drawer-input" min="1" max="900000" placeholder="例如: 120">
+          <span class="bw-drawer-input-unit">p</span>
+        </div>
+      </div>
+
+      <div class="bw-drawer-field">
+        <label class="bw-drawer-label" for="bw-create-qty">数量</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-create-qty" class="bw-drawer-input" min="1" max="9999" placeholder="例如: 1" value="1">
+        </div>
+      </div>
+
+      <div class="bw-drawer-field" id="bw-create-per-trade-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-per-trade">每批数量（批量出售，1–6）</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-create-per-trade" class="bw-drawer-input" min="1" max="6" value="1" placeholder="1–6">
+        </div>
+      </div>
+
+      <div class="bw-drawer-field" id="bw-create-rank-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-rank" id="bw-create-rank-label">等级</label>
+        <div class="bw-drawer-input-wrap">
+          <input type="number" id="bw-create-rank" class="bw-drawer-input" min="0" value="0" placeholder="0">
+        </div>
+      </div>
+
+      <div class="bw-drawer-field" id="bw-create-subtype-wrap" style="display:none">
+        <label class="bw-drawer-label" for="bw-create-subtype">子类型</label>
+        <select id="bw-create-subtype" class="bw-drawer-select"></select>
+      </div>
+
+      <div class="bw-drawer-actions">
+        <button class="bw-drawer-btn bw-drawer-btn-update" id="bw-create-submit">创建挂单</button>
+      </div>
+
+      <div class="bw-drawer-msg" id="bw-create-msg"></div>
     </div>
   </aside>
 

@@ -24,7 +24,9 @@ const WM_API             = 'https://api.warframe.market';
 const WM_DEVICE_ID       = '987d81b2-8a2c-425b-ae0e-cfba824548da';
 const WM_SLUG            = 'csc-2026';
 const WM_JWT_KV_KEY      = 'wm_jwt';
-const WM_JWT_TTL         = 60 * 60 * 12;        // 12 小时（WM JWT 通常 24h，保守取半）
+const WM_JWT_TTL         = 60 * 60 * 12;        // 12 小时
+const WM_ITEMS_KV_KEY    = 'wm_items_cache';
+const WM_ITEMS_TTL       = 60 * 60;             // 1 小时
 
 /* ══════════════════════════════════════════════
    通用工具
@@ -204,6 +206,44 @@ async function getWmJwt(env) {
   return wmSignin(env);
 }
 
+/* ══════════════════════════════════════════════
+   物品总表缓存（KV，1h TTL，Cron 主动刷新）
+══════════════════════════════════════════════ */
+async function refreshItemsCache(env) {
+  const resp = await fetch(`${WM_API}/v2/items`, {
+    headers: { 'Platform': 'pc', 'Language': 'en' },
+  });
+  if (!resp.ok) return null;
+  const json = await resp.json();
+  const items = (json.data || []).map(function (it) {
+    if (!it.id) return null;
+    const zh = it.i18n && it.i18n['zh-hans'] && it.i18n['zh-hans'].name;
+    const en = it.i18n && it.i18n['en'] && it.i18n['en'].name;
+    return {
+      id:           it.id,
+      slug:         it.slug,
+      zh:           zh || en || it.slug,
+      en:           en || it.slug,
+      bulkTradable: it.bulkTradable  || false,
+      maxRank:      it.maxRank       || null,
+      maxCharges:   it.maxCharges    || null,
+      subtypes:     it.subtypes      || null,
+      maxAmberStars: it.maxAmberStars || null,
+      maxCyanStars:  it.maxCyanStars  || null,
+    };
+  }).filter(Boolean);
+  await env.BW_SESSIONS.put(WM_ITEMS_KV_KEY, JSON.stringify(items), { expirationTtl: WM_ITEMS_TTL });
+  return items;
+}
+
+async function getItemsData(env) {
+  const cached = await env.BW_SESSIONS.get(WM_ITEMS_KV_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch {}
+  }
+  return refreshItemsCache(env);
+}
+
 // 带自动重试（JWT 过期时重新签入一次）的 WM 请求
 async function wmFetch(env, path, options) {
   const jwt  = await getWmJwt(env);
@@ -240,34 +280,27 @@ function wmJsonProxy(resp, text) {
 }
 
 // GET /api/wm/orders —— 获取全部挂单（含隐藏），仅本账号可见
-// 策略：
-//   ① 认证端点取全部订单（含隐藏），只含 itemId
-//   ② 并发拉 /v1/items 物品总表，建立 id → en/zh 名称映射
-//   ③ 合并，用名称填充每条订单的 item.en 字段
 async function handleWmOrders(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
-    const [authResp, itemsResp] = await Promise.all([
+    const [authResp, itemsList] = await Promise.all([
       wmFetch(env, `/v2/orders/user/${WM_SLUG}`, {}),
-      fetch(`${WM_API}/v2/items`, { headers: { 'Platform': 'pc', 'Language': 'en' } }),
+      getItemsData(env),
     ]);
 
-    const authJson  = authResp.ok  ? await authResp.json()  : { data: [] };
-    const itemsJson = itemsResp.ok ? await itemsResp.json() : {};
+    const authJson = authResp.ok ? await authResp.json() : { data: [] };
 
-    // v2/items 返回格式：{data: [{id, slug, i18n: {"zh-hans": {name}, "en": {name}}}]}
     const itemMap = {};
-    const itemsList = itemsJson.data || [];
-    itemsList.forEach(function (it) {
-      if (!it.id) return;
-      const zhName = it.i18n && it.i18n['zh-hans'] && it.i18n['zh-hans'].name;
-      const enName = it.i18n && it.i18n['en']      && it.i18n['en'].name;
-      itemMap[it.id] = { zh: zhName || enName || it.slug, en: enName || it.slug };
+    (itemsList || []).forEach(function (it) {
+      itemMap[it.id] = it;
     });
 
     const merged = (authJson.data || []).map(function (o) {
-      const names = itemMap[o.itemId];
-      return names ? Object.assign({}, o, { item: names }) : o;
+      const it = itemMap[o.itemId];
+      if (!it) return o;
+      return Object.assign({}, o, {
+        item: { zh: it.zh, en: it.en },
+      });
     });
 
     return jsonResponse({ data: merged });
@@ -276,12 +309,23 @@ async function handleWmOrders(request, env) {
   }
 }
 
-// POST /api/wm/orders —— 创建新挂单
+// GET /api/wm/items —— 返回 KV 缓存的物品总表（含 bulkTradable/maxRank 等元数据）
+async function handleWmItems(request, env) {
+  if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
+  try {
+    const items = await getItemsData(env);
+    return jsonResponse({ data: items || [] });
+  } catch (e) {
+    return jsonResponse({ error: '获取物品列表失败：' + e.message }, 502);
+  }
+}
+
+// POST /api/wm/orders —— 创建新挂单（WM 创建端点为 /v2/order 单数）
 async function handleWmOrderCreate(request, env) {
   if (!await getSessionEmail(request, env)) return jsonResponse({ error: '请先登录' }, 401);
   try {
     const body = await request.text();
-    const resp = await wmFetch(env, '/v2/orders', {
+    const resp = await wmFetch(env, '/v2/order', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
     });
     return wmJsonProxy(resp, await resp.text());
@@ -330,10 +374,9 @@ export default {
     if (p === '/api/auth/me'     && request.method === 'GET')  return handleMe(request, env);
 
     // ── WM 私有 API 代理 ──────────────────────
-    if (p === '/api/wm/orders') {
-      if (request.method === 'GET')  return handleWmOrders(request, env);
-      if (request.method === 'POST') return handleWmOrderCreate(request, env);
-    }
+    if (p === '/api/wm/items'  && request.method === 'GET')  return handleWmItems(request, env);
+    if (p === '/api/wm/orders' && request.method === 'GET')  return handleWmOrders(request, env);
+    if (p === '/api/wm/orders' && request.method === 'POST') return handleWmOrderCreate(request, env);
     const orderMatch = p.match(/^\/api\/wm\/orders\/([^/]+)$/);
     if (orderMatch) {
       if (request.method === 'PATCH')  return handleWmOrderPatch(request, env, orderMatch[1]);
@@ -342,5 +385,10 @@ export default {
 
     // ── 静态资源（index.html / css / js / picture） ──
     return env.ASSETS.fetch(request);
+  },
+
+  // Cron Trigger：每小时主动刷新物品总表缓存
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(refreshItemsCache(env));
   },
 };
