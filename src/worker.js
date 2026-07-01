@@ -133,40 +133,43 @@ function extractCookieValue(setCookieHeader, name) {
 }
 
 async function wmSignin(env) {
-  // ① 先 GET 登录页，拿 CSRF cookie（WM 会在此步骤 Set-Cookie: XSRF-TOKEN=...）
+  // ① GET 登录页 HTML，解析 <meta name="csrf-token" content="...">
   const pageResp = await fetch('https://warframe.market/auth/signin', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
   });
+  const html = await pageResp.text();
+
+  // WM 把 CSRF token 放在 <meta name="csrf-token" content="##xxxxx">
+  const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
+                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
+  const csrfToken = metaMatch ? metaMatch[1] : null;
+
+  // 把页面返回的所有 Set-Cookie 也带上（维持会话连续性）
   const pageCookies = pageResp.headers.get('Set-Cookie') || '';
+  const sessionCookies = pageCookies.split(',')
+    .map(c => c.trim().split(';')[0])   // 每条只取 name=value 部分
+    .filter(Boolean)
+    .join('; ');
 
-  // 常见 CSRF cookie 名称依次尝试
-  const csrfToken =
-    extractCookieValue(pageCookies, 'XSRF-TOKEN') ||
-    extractCookieValue(pageCookies, 'csrftoken')  ||
-    extractCookieValue(pageCookies, 'csrf_token') ||
-    extractCookieValue(pageCookies, '_csrf');
-
-  // 拼出要带给 POST 的 Cookie 字符串（把 CSRF token 也包含进去）
-  const cookieForPost = csrfToken ? `XSRF-TOKEN=${csrfToken}` : '';
-
-  // ② POST signin，携带 CSRF token（header + cookie 双保险）
+  // ② POST signin，带 CSRF token header
   const postHeaders = {
-    'Content-Type': 'application/json',
-    'Origin':       'https://warframe.market',
-    'Referer':      'https://warframe.market/auth/signin',
-    'Platform':     'pc',
-    'Language':     'en',
-    'User-Agent':   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Content-Type':    'application/json',
+    'Origin':          'https://warframe.market',
+    'Referer':         'https://warframe.market/auth/signin',
+    'Platform':        'pc',
+    'Language':        'en',
+    'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'X-Requested-With': 'XMLHttpRequest',
   };
-  // X-Requested-With 是许多框架判断 AJAX 请求（而非普通表单）的标志
-  postHeaders['X-Requested-With'] = 'XMLHttpRequest';
   if (csrfToken) {
-    postHeaders['X-XSRF-TOKEN'] = csrfToken;
-    postHeaders['X-CSRFToken']  = csrfToken;
-    postHeaders['Cookie']       = cookieForPost;
+    postHeaders['X-CSRF-Token']  = csrfToken;
+    postHeaders['X-CSRF-TOKEN']  = csrfToken;
+  }
+  if (sessionCookies) {
+    postHeaders['Cookie'] = sessionCookies;
   }
 
   const resp = await fetch(`${WM_API}/v1/auth/signin`, {
@@ -320,7 +323,10 @@ export default {
         });
         const allHeaders = {};
         r.headers.forEach((v, k) => { allHeaders[k] = v; });
-        return jsonResponse({ status: r.status, headers: allHeaders });
+        const html = await r.text();
+        const metaMatch = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i)
+                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']/i);
+        return jsonResponse({ status: r.status, headers: allHeaders, csrfToken: metaMatch ? metaMatch[1] : null });
       } catch (e) {
         return jsonResponse({ error: e.message }, 500);
       }
