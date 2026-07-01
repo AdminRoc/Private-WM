@@ -384,7 +384,9 @@ function avgBadgeHtml(slug) {
   if (!c) return '<span class="bw-avg-badge loading" data-slug="' + slug + '">均价…</span>';
   if (c.avg === null || c.avg === undefined) return '<span class="bw-avg-badge nodata" data-slug="' + slug + '">暂无均价</span>';
   const tgt = Math.round(c.avg * _mult);
-  return '<span class="bw-avg-badge ok" data-slug="' + slug + '">均 ' + c.avg + 'p × ' + _mult + ' = ' + tgt + 'p</span>';
+  const cls = c.special ? 'special' : 'ok';
+  const rare = c.special ? '<span class="bw-avg-rare">稀缺</span>' : '';
+  return '<span class="bw-avg-badge ' + cls + '" data-slug="' + slug + '">' + rare + '均 ' + c.avg + 'p × ' + _mult + ' = ' + tgt + 'p</span>';
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -491,12 +493,15 @@ function loadMissingAvg(list) {
           el.textContent = '暂无均价'; el.classList.add('nodata');
         } else {
           const tgt = Math.round(data.avg * _mult);
-          el.textContent = '均 ' + data.avg + 'p × ' + _mult + ' = ' + tgt + 'p';
-          el.classList.add('ok');
+          const cls = data.special ? 'special' : 'ok';
+          el.classList.add(cls);
+          el.innerHTML = (data.special ? '<span class="bw-avg-rare">稀缺</span>' : '') +
+            '均 ' + data.avg + 'p × ' + _mult + ' = ' + tgt + 'p';
         }
       });
       document.querySelectorAll('.bw-order-row[data-slug="' + slug + '"]').forEach(function(row) {
         const o = _orders.find(function(x) { return x.id === row.dataset.id; });
+        if (data.special) row.classList.add('bw-special-row');
         if (o && data.avg !== null && o.platinum < data.avg * 1.5) row.classList.add('bw-alert-row');
       });
       updateAlertBadges();

@@ -436,7 +436,7 @@ function calcAvg(allOrders) {
     used = trimmed.length;
     if (used > 0) avg = Math.round(trimmed.reduce(function(s, v) { return s + v; }, 0) / used);
   }
-  return { avg, count: ingame.length, used, total };
+  return { avg, count: ingame.length, used, total, special: ingame.length < 3 || undefined };
 }
 
 // GET /api/wm/price/:slug —— 均价查询：KV缓存 → 静态文件 → 实时拉取

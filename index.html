@@ -57,8 +57,12 @@
             <input type="text" id="bw-search-q" class="bw-search-input" placeholder="搜索物品名称…" autocomplete="off">
           </div>
           <div class="bw-filter-group">
-            <button class="bw-special-f-btn" id="bw-filter-special" data-active="0" title="显示参考价不足的订单（ingame卖家<3）">⚡ 特殊</button>
-            <button class="bw-alert-f-btn" id="bw-filter-alert" data-active="0" title="显示价格警报订单">⚠ 价格警报</button>
+            <button class="bw-special-f-btn" id="bw-filter-special" data-active="0" title="显示稀缺订单（ingame卖家不足3人）">
+              <span class="bw-f-dot bw-f-dot-rare"></span>稀缺
+            </button>
+            <button class="bw-alert-f-btn" id="bw-filter-alert" data-active="0" title="显示价格偏低的警报订单">
+              <span class="bw-f-dot bw-f-dot-warn"></span>价格警报
+            </button>
           </div>
         </div>
 
@@ -102,36 +106,56 @@
           </div>
 
           <!-- 刷新物品缓存 -->
-          <button class="bw-vis-all-btn" id="bw-refresh-items-btn" title="重新拉取物品数据（含中文名）" style="border-color:rgba(80,160,240,.4);color:rgba(80,160,240,.85)">↺ 刷新物品</button>
+          <button class="bw-vis-all-btn bw-refresh-btn" id="bw-refresh-items-btn" title="重新拉取物品数据（含中文名）">
+            <svg class="bw-btn-icon" viewBox="0 0 14 14" fill="none"><path d="M11.5 7A4.5 4.5 0 1 1 7 2.5M11.5 2v3.5H8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新物品
+          </button>
           <!-- 全部显示 / 隐藏 -->
-          <button class="bw-vis-all-btn" id="bw-vis-show-all" title="显示全部订单">显示全部</button>
-          <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="隐藏全部订单">隐藏全部</button>
+          <button class="bw-vis-all-btn" id="bw-vis-show-all" title="显示全部订单">全部上架</button>
+          <button class="bw-vis-all-btn is-hide" id="bw-vis-hide-all" title="隐藏全部订单">全部下架</button>
 
-          <button class="bw-create-btn" id="bw-create-btn">＋ 创建订单</button>
+          <button class="bw-create-btn" id="bw-create-btn">
+            <svg class="bw-btn-icon" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            创建订单
+          </button>
         </div>
       </div>
 
       <!-- 批量操作面板（始终显示） -->
       <div class="bw-batch-panel" id="bw-batch-panel">
-        <span class="bw-batch-label">批量操作（当前筛选 <span id="bw-batch-count">0</span> 条）：</span>
-        <div class="bw-batch-row">
-          <label class="bw-batch-field-label">改价格</label>
-          <input type="number" id="bw-batch-price" class="bw-batch-input" placeholder="新价格 p" min="1">
-          <button class="bw-batch-btn" id="bw-batch-price-btn">执行</button>
+        <div class="bw-batch-header">
+          <span class="bw-batch-title">批量编辑</span>
+          <span class="bw-batch-count-label">当前筛选 <strong id="bw-batch-count">0</strong> 条</span>
         </div>
-        <div class="bw-batch-row">
-          <label class="bw-batch-field-label">改数量</label>
-          <input type="number" id="bw-batch-qty" class="bw-batch-input" placeholder="新数量" min="1">
-          <button class="bw-batch-btn" id="bw-batch-qty-btn">执行</button>
-        </div>
-        <div class="bw-batch-row">
-          <label class="bw-batch-field-label">批量改均价倍率</label>
-          <input type="number" id="bw-batch-mult-input" class="bw-batch-input" placeholder="倍率" min="0.1" step="0.1" value="1">
-          <span class="bw-batch-field-label">×</span>
-          <button class="bw-batch-btn" id="bw-batch-mult-btn">应用当前倍率</button>
+        <div class="bw-batch-controls">
+          <div class="bw-batch-item">
+            <label class="bw-batch-field-label">设定价格</label>
+            <div class="bw-batch-input-row">
+              <input type="number" id="bw-batch-price" class="bw-batch-input" placeholder="铂金" min="1">
+              <span class="bw-batch-unit">p</span>
+              <button class="bw-batch-btn" id="bw-batch-price-btn">应用</button>
+            </div>
+          </div>
+          <div class="bw-batch-item">
+            <label class="bw-batch-field-label">设定数量</label>
+            <div class="bw-batch-input-row">
+              <input type="number" id="bw-batch-qty" class="bw-batch-input" placeholder="数量" min="1">
+              <button class="bw-batch-btn" id="bw-batch-qty-btn">应用</button>
+            </div>
+          </div>
+          <div class="bw-batch-item bw-batch-item-accent">
+            <label class="bw-batch-field-label">均价 × 倍率</label>
+            <div class="bw-batch-input-row">
+              <input type="number" id="bw-batch-mult-input" class="bw-batch-input" placeholder="倍率" min="0.1" step="0.1" value="1">
+              <span class="bw-batch-unit">×</span>
+              <button class="bw-batch-btn bw-batch-btn-accent" id="bw-batch-mult-btn">批量应用</button>
+            </div>
+          </div>
         </div>
         <div class="bw-batch-progress" id="bw-batch-progress" style="display:none">
-          <div class="bw-batch-bar" id="bw-batch-bar"></div>
+          <div class="bw-batch-bar-wrap">
+            <div class="bw-batch-bar" id="bw-batch-bar"></div>
+          </div>
           <span class="bw-batch-prog-text" id="bw-batch-prog-text">0 / 0</span>
         </div>
       </div>
@@ -140,17 +164,19 @@
     <!-- 价格警报区 -->
     <div class="bw-alert-section" id="bw-alert-section" style="display:none">
       <div class="bw-alert-header">
-        <span class="bw-alert-icon">⚠</span>
+        <span class="bw-alert-indicator"></span>
         <span class="bw-alert-title">价格警报</span>
         <span class="bw-alert-sub" id="bw-alert-count"></span>
-        <button class="bw-alert-close" id="bw-alert-close">✕</button>
+        <button class="bw-alert-close" id="bw-alert-close" title="关闭">
+          <svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
       </div>
       <div id="bw-alert-list" class="bw-order-list bw-alert-list"></div>
     </div>
 
     <!-- 价格警报浮动按钮（有警报时出现） -->
     <button class="bw-alert-fab" id="bw-alert-fab" style="display:none" title="查看价格警报">
-      <span class="bw-alert-fab-icon">⚠</span>
+      <svg class="bw-fab-icon" viewBox="0 0 16 16" fill="none" width="14" height="14"><path d="M8 1.5L14.5 13H1.5L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r=".8" fill="currentColor"/></svg>
       <span id="bw-alert-fab-n">0</span>
     </button>
 
@@ -178,7 +204,7 @@
   <aside id="bw-edit-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="编辑订单">
     <div class="bw-drawer-header">
       <span class="bw-drawer-title" id="bw-drawer-item-name">—</span>
-      <button class="bw-drawer-close" id="bw-drawer-close" title="关闭">✕</button>
+      <button class="bw-drawer-close" id="bw-drawer-close" title="关闭"><svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     </div>
     <div class="bw-drawer-body">
       <div class="bw-drawer-type-badge" id="bw-drawer-type-badge"></div>
@@ -220,7 +246,7 @@
       </div>
 
       <div class="bw-drawer-confirm-del" id="bw-drawer-confirm-del">
-        <p class="bw-drawer-confirm-text">⚠ 确认删除此订单？操作不可撤销。</p>
+        <p class="bw-drawer-confirm-text">确认删除此订单？此操作不可撤销。</p>
         <div class="bw-drawer-confirm-btns">
           <button class="bw-drawer-btn bw-drawer-btn-cancel" id="bw-drawer-confirm-no">取消</button>
           <button class="bw-drawer-btn bw-drawer-btn-delete-confirm" id="bw-drawer-confirm-yes">确认删除</button>
@@ -238,7 +264,7 @@
   <aside id="bw-create-drawer" class="bw-edit-drawer" role="dialog" aria-modal="true" aria-label="创建订单">
     <div class="bw-drawer-header">
       <span class="bw-drawer-title">创建新订单</span>
-      <button class="bw-drawer-close" id="bw-create-close" title="关闭">✕</button>
+      <button class="bw-drawer-close" id="bw-create-close" title="关闭"><svg viewBox="0 0 10 10" fill="none" width="10" height="10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     </div>
     <div class="bw-drawer-body">
       <div class="bw-drawer-field">
