@@ -539,8 +539,43 @@ async function handleThumbProxy(request) {
 }
 
 async function handleAvatarProxy(request, env) {
-  // 直接返回本地 CSC logo，不再尝试从 WM 获取头像
   return env.ASSETS.fetch(new Request(new URL('/picture/avatar-csc-2026.svg', request.url)));
+}
+
+/* ══ 在线状态：读取 & 设置 ══════════════════════════════════ */
+async function handleGetStatus(request, env) {
+  const wmJwt = await getWmJwt(request, env);
+  if (!wmJwt) return jsonResponse({ error: '未登录' }, 401);
+  try {
+    const resp = await wmFetch(wmJwt, '/v1/profile', {});
+    if (!resp.ok) return jsonResponse({ status: 'offline' });
+    const json = await resp.json();
+    const profile = (json.payload && json.payload.profile) || json.data || {};
+    return jsonResponse({ ok: true, status: profile.status || 'offline' });
+  } catch { return jsonResponse({ status: 'offline' }); }
+}
+
+async function handleSetStatus(request, env) {
+  const wmJwt = await getWmJwt(request, env);
+  if (!wmJwt) return jsonResponse({ error: '未登录' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return jsonResponse({ error: '参数错误' }, 400); }
+  const status = body.status;
+  if (!['online', 'ingame', 'invisible'].includes(status)) {
+    return jsonResponse({ error: '无效状态值' }, 400);
+  }
+  try {
+    const resp = await wmFetch(wmJwt, '/v1/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return jsonResponse({ error: 'WM拒绝：' + resp.status + ' ' + txt.slice(0, 80) }, 502);
+    }
+    return jsonResponse({ ok: true, status });
+  } catch(e) { return jsonResponse({ error: e.message }, 502); }
 }
 
 /* ══ 定时任务：分批预计算全量 WM 物品均价 ══════════════════════
@@ -638,6 +673,9 @@ export default {
       if (request.method === 'PATCH')  return handleWmOrderPatch(request, env, orderMatch[1]);
       if (request.method === 'DELETE') return handleWmOrderDelete(request, env, orderMatch[1]);
     }
+
+    if (p === '/api/wm/status' && request.method === 'GET')  return handleGetStatus(request, env);
+    if (p === '/api/wm/status' && request.method === 'PUT')  return handleSetStatus(request, env);
 
     const priceMatch = p.match(/^\/api\/wm\/price\/([^/]+)$/);
     if (priceMatch && request.method === 'GET') return handleWmPrice(request, env, priceMatch[1]);

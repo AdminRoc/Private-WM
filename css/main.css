@@ -152,9 +152,38 @@ input, button, select { font-family: var(--f-main); }
 .bw-ign { font-family: var(--f-main); font-size: 1.35rem; font-weight: 800; color: var(--c-white); letter-spacing: .04em; }
 .bw-meta { margin-top: .45rem; color: var(--c-text2); font-size: .85rem; display: flex; gap: 1rem; flex-wrap: wrap; }
 .bw-status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: .3rem; }
-.bw-status-dot.online  { background: var(--c-buy);  box-shadow: 0 0 6px var(--c-buy); }
-.bw-status-dot.ingame  { background: var(--c-gold-bright); box-shadow: 0 0 6px var(--c-gold-bright); }
-.bw-status-dot.offline { background: #46506a; }
+.bw-status-dot.online    { background: var(--c-buy);  box-shadow: 0 0 6px var(--c-buy); }
+.bw-status-dot.ingame    { background: var(--c-gold-bright); box-shadow: 0 0 6px var(--c-gold-bright); }
+.bw-status-dot.offline   { background: #46506a; }
+.bw-status-dot.invisible { background: #46506a; border: 1.5px dashed #6a7a9a; }
+
+/* ─── 在线状态控制模块 ─── */
+.bw-status-ctrl { margin-top: .8rem; display: flex; flex-direction: column; gap: .45rem; }
+.bw-status-row  { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.bw-status-label { font-size: .75rem; color: var(--c-text2); min-width: 4em; }
+.bw-status-btn {
+  font-size: .75rem; padding: .2rem .7rem; border-radius: 20px; cursor: pointer;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+  color: var(--c-text2); transition: all .18s ease;
+}
+.bw-status-btn:hover { border-color: rgba(212,168,74,.5); color: var(--c-gold-bright); }
+.bw-status-btn.active-online    { background: rgba(94,207,114,.15); border-color: var(--c-buy); color: var(--c-buy); }
+.bw-status-btn.active-ingame    { background: rgba(212,168,74,.15); border-color: var(--c-gold-bright); color: var(--c-gold-bright); }
+.bw-status-btn.active-invisible { background: rgba(70,80,106,.25); border-color: #6a7a9a; color: #8a9aba; }
+.bw-dur-btn {
+  font-size: .72rem; padding: .18rem .55rem; border-radius: 20px; cursor: pointer;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+  color: var(--c-text2); transition: all .15s ease;
+}
+.bw-dur-btn:hover   { border-color: rgba(212,168,74,.4); color: var(--c-gold-bright); }
+.bw-dur-btn.active  { background: rgba(212,168,74,.12); border-color: var(--c-gold-mid); color: var(--c-gold-bright); }
+.bw-maintain-toggle {
+  font-size: .72rem; padding: .18rem .7rem; border-radius: 20px; cursor: pointer;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+  color: var(--c-text2); transition: all .18s ease;
+}
+.bw-maintain-toggle.on { background: rgba(94,207,114,.12); border-color: var(--c-buy); color: var(--c-buy); }
+.bw-status-timer { font-size: .72rem; color: var(--c-text2); font-variant-numeric: tabular-nums; }
 
 /* ─── 筛选工具栏 ─── */
 .bw-toolbar {

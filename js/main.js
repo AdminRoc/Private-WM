@@ -26,6 +26,14 @@ let _openRow   = null;
 let _openEdit  = null;
 let _alertClosed = false;
 
+/* 在线状态维持 */
+let _wmStatus      = 'offline';   // 当前实际状态
+let _maintainOn    = false;       // 是否正在维持
+let _maintainDurMs = 60 * 60 * 1000; // 维持时长（ms），默认1h
+let _maintainEnd   = 0;           // 维持到期时间戳
+let _maintainTimer = null;        // setInterval handle（每5分钟ping）
+let _countdownTimer = null;       // setInterval handle（每秒更新倒计时）
+
 /* ──────────────────────────────────────────────────────────
    工具
 ─────────────────────────────────────────────────────────── */
@@ -185,22 +193,128 @@ function fetchAvg(slug) {
 /* ──────────────────────────────────────────────────────────
    个人资料卡
 ─────────────────────────────────────────────────────────── */
+const STATUS_LABELS = { online: '在线', ingame: '游戏中', invisible: '隐身', offline: '离线' };
+const STATUS_DOT_CLS = { online: 'online', ingame: 'ingame', invisible: 'invisible', offline: 'offline' };
+
 function renderProfile(sess) {
   const card = document.getElementById('bw-profile-card');
   if (!card) return;
-  const slug      = sess.slug || sess.ingame_name || '—';
-  const status    = sess.status || 'offline';
-  const dotCls    = status === 'ingame' ? 'ingame' : status === 'online' ? 'online' : 'offline';
-  const statusTxt = { ingame: '游戏中', online: '在线', offline: '离线' }[status] || status;
+  const slug = sess.slug || sess.ingame_name || '—';
   card.innerHTML = `
 <img class="bw-avatar" id="bw-avatar-img" src="/picture/avatar-csc-2026.svg" alt="avatar">
 <div class="bw-profile-info">
   <div class="bw-ign">${slug}</div>
   <div class="bw-meta">
-    <span><span class="bw-status-dot ${dotCls}"></span>${statusTxt}</span>
+    <span><span class="bw-status-dot offline" id="bw-sdot"></span><span id="bw-stxt">获取中…</span></span>
     <span>订单：<span id="bw-total-count">…</span></span>
   </div>
+  <div class="bw-status-ctrl" id="bw-status-ctrl">
+    <div class="bw-status-row">
+      <span class="bw-status-label">状态</span>
+      <button class="bw-status-btn" data-s="online">在线</button>
+      <button class="bw-status-btn" data-s="ingame">游戏中</button>
+      <button class="bw-status-btn" data-s="invisible">隐身</button>
+    </div>
+    <div class="bw-status-row">
+      <span class="bw-status-label">并保持</span>
+      <button class="bw-dur-btn" data-d="1800000">30分</button>
+      <button class="bw-dur-btn active" data-d="3600000">1时</button>
+      <button class="bw-dur-btn" data-d="7200000">2时</button>
+      <button class="bw-dur-btn" data-d="14400000">4时</button>
+      <button class="bw-maintain-toggle" id="bw-maintain-btn">开始维持</button>
+      <span class="bw-status-timer" id="bw-status-timer"></span>
+    </div>
+  </div>
 </div>`;
+  initStatusCtrl();
+}
+
+/* ── 初始化状态控制模块 ──────────────────────────────────── */
+async function initStatusCtrl() {
+  // 拉取真实状态
+  try {
+    const j = await apiFetch('/status');
+    if (j.status) setStatusDisplay(j.status);
+  } catch {}
+
+  // 状态按钮
+  document.querySelectorAll('.bw-status-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const s = btn.dataset.s;
+      try {
+        const j = await apiFetch('/status', { method: 'PUT', body: JSON.stringify({ status: s }) });
+        if (j.ok) setStatusDisplay(s);
+      } catch(e) { alert('设置失败：' + e.message); }
+    });
+  });
+
+  // 时长按钮
+  document.querySelectorAll('.bw-dur-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.bw-dur-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      _maintainDurMs = parseInt(btn.dataset.d, 10);
+      // 如果正在维持，重置到期时间
+      if (_maintainOn) { _maintainEnd = Date.now() + _maintainDurMs; }
+    });
+  });
+
+  // 维持按钮
+  document.getElementById('bw-maintain-btn').addEventListener('click', function() {
+    _maintainOn ? stopMaintain() : startMaintain();
+  });
+}
+
+function setStatusDisplay(status) {
+  _wmStatus = status;
+  const dot = document.getElementById('bw-sdot');
+  const txt = document.getElementById('bw-stxt');
+  if (dot) { dot.className = 'bw-status-dot ' + (STATUS_DOT_CLS[status] || 'offline'); }
+  if (txt) { txt.textContent = STATUS_LABELS[status] || status; }
+  // 高亮对应状态按钮
+  document.querySelectorAll('.bw-status-btn').forEach(function(b) {
+    b.className = 'bw-status-btn' + (b.dataset.s === status ? ' active-' + status : '');
+  });
+}
+
+function startMaintain() {
+  _maintainOn  = true;
+  _maintainEnd = Date.now() + _maintainDurMs;
+  const btn = document.getElementById('bw-maintain-btn');
+  if (btn) { btn.textContent = '停止维持'; btn.classList.add('on'); }
+
+  // 每5分钟向WM发一次心跳维持状态
+  _maintainTimer = setInterval(async function() {
+    if (Date.now() >= _maintainEnd) { stopMaintain(); return; }
+    try { await apiFetch('/status', { method: 'PUT', body: JSON.stringify({ status: _wmStatus }) }); } catch {}
+  }, 5 * 60 * 1000);
+
+  // 每秒更新倒计时显示
+  _countdownTimer = setInterval(updateCountdown, 1000);
+  updateCountdown();
+}
+
+function stopMaintain() {
+  _maintainOn = false;
+  clearInterval(_maintainTimer);
+  clearInterval(_countdownTimer);
+  _maintainTimer = null;
+  _countdownTimer = null;
+  const btn = document.getElementById('bw-maintain-btn');
+  if (btn) { btn.textContent = '开始维持'; btn.classList.remove('on'); }
+  const timer = document.getElementById('bw-status-timer');
+  if (timer) timer.textContent = '';
+}
+
+function updateCountdown() {
+  const timer = document.getElementById('bw-status-timer');
+  if (!timer) { stopMaintain(); return; }
+  const left = Math.max(0, _maintainEnd - Date.now());
+  if (left === 0) { stopMaintain(); return; }
+  const h = Math.floor(left / 3600000);
+  const m = Math.floor((left % 3600000) / 60000);
+  const s = Math.floor((left % 60000) / 1000);
+  timer.textContent = (h > 0 ? h + ':' : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
 }
 
 /* ──────────────────────────────────────────────────────────
