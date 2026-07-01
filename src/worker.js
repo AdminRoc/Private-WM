@@ -586,8 +586,8 @@ async function computeAllPrices(env) {
       const result = { avg, count, used, total: allOrders.length, special: special || undefined };
       await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: 60 * 60 * 7 });
     } catch {}
-    // 限速：每条 420ms，约 1500 条需 10 分钟，在 Cloudflare Scheduled 30min 上限内
-    await new Promise(function(r) { setTimeout(r, 420); });
+    // 限速：每条随机 400-700ms，模拟正常浏览行为，约 1500 条 12 分钟内完成
+    await new Promise(function(r) { setTimeout(r, 400 + Math.random() * 300); });
   }
 }
 
