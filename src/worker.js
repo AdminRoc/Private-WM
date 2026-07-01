@@ -490,7 +490,7 @@ async function handleWmStats(request, env, slug) {
       .map(d => ({ day: d.day, avg: d.volume > 0 ? Math.round(d.sum / d.volume) : 0, volume: d.volume, median: d.median }))
       .sort((a, b) => a.day.localeCompare(b.day));
 
-    await env.BW_SESSIONS.put(cacheKey, JSON.stringify(points), { expirationTtl: 1800 });
+    await env.BW_SESSIONS.put(cacheKey, JSON.stringify(points), { expirationTtl: 60 * 60 * 12 });
     return jsonResponse({ data: points });
   } catch (e) {
     return jsonResponse({ data: null });
