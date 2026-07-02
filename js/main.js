@@ -149,31 +149,7 @@ async function checkSession() {
 }
 
 function showLogin() {
-  document.body.innerHTML = `
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#07080f;font-family:'xszt','PingFang SC','Microsoft YaHei',sans-serif">
-<div style="width:340px;padding:2rem 2.2rem;background:rgba(10,16,34,.92);border:1px solid rgba(185,142,52,.38);border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.65)">
-  <div style="font-size:1.3rem;font-weight:800;color:#d4a84a;letter-spacing:.08em;margin-bottom:.3rem">CSC·Alliance</div>
-  <div style="font-size:.8rem;color:#6888a8;margin-bottom:1.6rem;letter-spacing:.12em">BOSS TOOL — 登录</div>
-  <input id="li-email" type="text" autocomplete="username" placeholder="用户名 / Email" style="width:100%;padding:.6rem .85rem;background:rgba(0,0,0,.5);border:1px solid rgba(185,142,52,.3);border-radius:8px;color:#eef6ff;font-size:.95rem;outline:none;margin-bottom:.75rem;font-family:inherit;box-sizing:border-box">
-  <input id="li-pw" type="password" autocomplete="current-password" placeholder="密码" style="width:100%;padding:.6rem .85rem;background:rgba(0,0,0,.5);border:1px solid rgba(185,142,52,.3);border-radius:8px;color:#eef6ff;font-size:.95rem;outline:none;margin-bottom:1rem;font-family:inherit;box-sizing:border-box">
-  <button id="li-btn" style="width:100%;padding:.65rem;background:rgba(192,148,58,.2);border:1px solid rgba(212,168,74,.6);border-radius:8px;color:#d4a84a;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit">登录</button>
-  <div id="li-msg" style="margin-top:.75rem;font-size:.8rem;text-align:center;min-height:1.1em;color:#e8924a"></div>
-</div></div>`;
-  const btn = document.getElementById('li-btn');
-  const msg = document.getElementById('li-msg');
-  async function doLogin() {
-    const email = document.getElementById('li-email').value.trim();
-    const pw    = document.getElementById('li-pw').value;
-    if (!email || !pw) { msg.textContent = '请填写用户名和密码'; return; }
-    btn.disabled = true; msg.textContent = '登录中…';
-    try {
-      const j = await apiFetch('/signin', { method: 'POST', body: JSON.stringify({ email, password: pw }) });
-      if (j.ok) { location.reload(); }
-      else { msg.textContent = j.error || '登录失败，请重试'; btn.disabled = false; }
-    } catch(e) { msg.textContent = e.message || '网络错误'; btn.disabled = false; }
-  }
-  btn.addEventListener('click', doLogin);
-  document.addEventListener('keydown', function kd(e) { if (e.key === 'Enter') doLogin(); });
+  location.href = 'login.html';
 }
 
 /* ──────────────────────────────────────────────────────────

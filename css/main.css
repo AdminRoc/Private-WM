@@ -211,58 +211,43 @@ input, button, select { font-family: var(--f-main); }
   100% { text-shadow: 0 0 22px rgba(247,223,160,.85); }
 }
 
-/* 平行四边形填充层：与 .bw-nav-slash 共享同一 skewX 变换公式，逐像素贴合、无角度误差 */
+/* 平行四边形填充层：与 .bw-nav-slash 共享同一 skewX 变换公式，逐像素贴合、无角度误差。
+   悬停光效不再是"一个色块位移"——改为直接烘进背景的无限循环纹理（多条极细斜向亮纹，
+   通过 background-position 连续平移），观感是一整片能量场在流动，没有可见的
+   起点/终点，也就没有"滑块"的既视感；配合整体呼吸增强层次。 */
 .bw-tab-fill {
   position: absolute; inset: 0; z-index: 0;
   transform: skewX(-16deg) translate3d(0,0,0);
-  background: linear-gradient(180deg, rgba(255,214,120,.3) 0%, rgba(212,168,74,.16) 100%);
-  box-shadow: inset 0 0 26px rgba(255,215,120,.22);
+  background:
+    linear-gradient(180deg, rgba(255,214,120,.3) 0%, rgba(212,168,74,.16) 100%),
+    repeating-linear-gradient(115deg,
+      transparent           0,
+      transparent            18px,
+      rgba(255,244,214,.55)  18px,
+      rgba(255,244,214,.55)  20px,
+      transparent            20px,
+      transparent            64px);
+  background-size: 100% 100%, 340% 340%;
+  background-position: 0 0, 0% 0%;
   opacity: 0;
   transition: opacity .22s ease;
   pointer-events: none;
   overflow: hidden;
+  will-change: opacity, background-position, filter;
 }
 .bw-nav-link:hover .bw-tab-fill {
   opacity: 1;
-  animation: navFillPulse 2.6s ease-in-out infinite;
+  animation:
+    navFillPulse 2.8s ease-in-out infinite,
+    navFillFlow 3.6s linear infinite;
 }
 @keyframes navFillPulse {
   0%, 100% { filter: brightness(1)    saturate(1); }
-  50%       { filter: brightness(1.28) saturate(1.15); }
+  50%       { filter: brightness(1.24) saturate(1.12); }
 }
-
-/* 双层「能量刃」扫光：明亮核心 + 稍宽的柔光尾迹，用负 animation-delay 制造前后跟随的彗尾感，
-   循环运行；ease 曲线而非线性匀速，避免机械感；GPU 合成层（translate3d + will-change） */
-.bw-tab-fill::before,
-.bw-tab-fill::after {
-  content: '';
-  position: absolute; top: -130%; left: -60%; height: 360%;
-  pointer-events: none;
-  transform: translate3d(-5%,0,0);
-  will-change: transform, opacity;
-  animation: navBladeSweep 2.1s cubic-bezier(.37,0,.63,1) infinite;
-  animation-play-state: paused;
-}
-.bw-tab-fill::before {
-  width: 10%;
-  background: linear-gradient(108deg,
-    transparent 10%, rgba(255,246,220,.05) 40%, #fff7e0 50%, rgba(255,246,220,.05) 60%, transparent 90%);
-  filter: drop-shadow(0 0 6px rgba(255,236,180,.8));
-}
-.bw-tab-fill::after {
-  width: 26%;
-  background: linear-gradient(108deg,
-    transparent 15%, rgba(255,214,120,.4) 50%, transparent 85%);
-  animation-delay: -.22s;
-}
-.bw-nav-link:hover .bw-tab-fill::before,
-.bw-nav-link:hover .bw-tab-fill::after { animation-play-state: running; }
-@keyframes navBladeSweep {
-  0%   { transform: translate3d(-8%,0,0);   opacity: 0; }
-  10%  { opacity: 1; }
-  50%  { transform: translate3d(230%,0,0);  opacity: 1; }
-  90%  { opacity: 1; }
-  100% { transform: translate3d(440%,0,0);  opacity: 0; }
+@keyframes navFillFlow {
+  from { background-position: 0 0, 0% 0%; }
+  to   { background-position: 0 0, -100% -100%; }
 }
 
 /* 底部辉光线 — 悬停期间持续脉动循环，中心向两侧展开后维持呼吸 */
