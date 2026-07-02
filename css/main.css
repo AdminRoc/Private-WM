@@ -186,37 +186,60 @@ input, button, select { font-family: var(--f-main); }
   pointer-events: none;
   overflow: hidden;
 }
-.bw-nav-link:hover .bw-tab-fill { opacity: 1; }
+.bw-nav-link:hover .bw-tab-fill {
+  opacity: 1;
+  animation: navFillPulse 2.4s ease-in-out infinite;
+}
+@keyframes navFillPulse {
+  0%, 100% { filter: brightness(1)   saturate(1); }
+  50%       { filter: brightness(1.3) saturate(1.15); }
+}
 
-/* 悬停对角扫光 — 位于 .bw-tab-fill 的（已 skew 的）局部坐标系内，被 overflow:hidden 天然裁剪 */
+/* 悬停对角扫光 — 位于 .bw-tab-fill 的（已 skew 的）局部坐标系内，被 overflow:hidden 天然裁剪
+   常驻挂载 + animation-play-state 控制启停，避免 hover 瞬间才创建动画导致的掉帧/卡顿；
+   循环运行、GPU 合成层（translate3d + will-change），高帧率持续扫光而非一次性停止 */
 .bw-tab-fill::before {
   content: '';
-  position: absolute; top: -120%; left: -55%; width: 32%; height: 340%;
+  position: absolute; top: -130%; left: -60%; width: 30%; height: 360%;
   background: linear-gradient(108deg,
-    transparent 30%, rgba(255,230,150,.6) 50%, transparent 70%);
-  opacity: 0; pointer-events: none;
+    transparent 20%, rgba(255,236,175,.85) 50%, transparent 80%);
+  pointer-events: none;
+  transform: translate3d(0,0,0);
+  will-change: transform, opacity;
+  animation: navTabSweep 1.7s linear infinite;
+  animation-play-state: paused;
 }
-.bw-nav-link:hover .bw-tab-fill::before {
-  animation: navTabSweep .5s ease forwards;
-}
+.bw-nav-link:hover .bw-tab-fill::before { animation-play-state: running; }
 @keyframes navTabSweep {
-  from { transform: translateX(-5%);   opacity: 1; }
-  to   { transform: translateX(420%);  opacity: 1; }
+  0%   { transform: translate3d(-5%,0,0);   opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translate3d(230%,0,0);  opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translate3d(430%,0,0);  opacity: 0; }
 }
 
-/* 底部辉光线 */
+/* 底部辉光线 — 悬停期间同样持续脉动循环，而不是点亮后静止 */
 .bw-nav-shine {
   position: absolute; bottom: 0;
   left: 50%; right: 50%; height: 2px; z-index: 2;
   background: linear-gradient(90deg, transparent, #f7dfa0, transparent);
   box-shadow: 0 0 10px 2px rgba(247,223,160,.6);
   opacity: 0;
+  transform: translate3d(0,0,0);
+  will-change: opacity, box-shadow;
   transition: opacity .24s ease,
     left .3s cubic-bezier(.22,.68,0,1.2),
     right .3s cubic-bezier(.22,.68,0,1.2);
   pointer-events: none;
 }
-.bw-nav-link:hover .bw-nav-shine { opacity: 1; left: 8%; right: 8%; }
+.bw-nav-link:hover .bw-nav-shine {
+  opacity: 1; left: 8%; right: 8%;
+  animation: navShinePulse 2.4s ease-in-out infinite;
+}
+@keyframes navShinePulse {
+  0%, 100% { box-shadow: 0 0 10px 2px rgba(247,223,160,.6); }
+  50%       { box-shadow: 0 0 18px 4px rgba(247,223,160,.95); }
+}
 
 .bw-nav-label { position: relative; z-index: 1; }
 
@@ -332,29 +355,29 @@ input, button, select { font-family: var(--f-main); }
 .bw-wf-bg img {
   width: 80vw; height: 80vh;
   object-fit: contain;
-  /* 向下偏移 + 整体放大 20%，让莲花纹路居中，避开底部不可见的黑色文字 */
-  transform: translateY(14%) scale(1.2);
+  /* 向下偏移 + 整体放大（1.2 再放大 20% = 1.44），让莲花纹路居中，避开底部不可见的黑色文字 */
+  transform: translateY(20%) scale(1.44);
   filter: blur(2px) saturate(1.15);
   opacity: 0;
-  animation: wfBreath 9s ease-in-out infinite;
+  animation: wfBreath 10.8s ease-in-out infinite;
   will-change: opacity, transform, filter;
 }
 @keyframes wfBreath {
   0%, 100% { opacity: 0; }
-  50%       { opacity: .35; }
+  50%       { opacity: .4; }
 }
 @keyframes wfGlitch {
-  0%   { transform: translateY(14%) scale(1.2) translate(0,0) skewX(0deg);       filter: blur(2px) saturate(1.15) hue-rotate(0deg); }
-  12%  { transform: translateY(14%) scale(1.2) translate(-7px,3px) skewX(2.4deg); filter: blur(1px) saturate(1.5) hue-rotate(18deg); }
-  24%  { transform: translateY(14%) scale(1.2) translate(6px,-2px) skewX(-3deg); }
-  36%  { transform: translateY(14%) scale(1.2) translate(-4px,4px) skewX(1.5deg); filter: blur(2.4px) saturate(.75) hue-rotate(-14deg); }
-  48%  { transform: translateY(14%) scale(1.2) translate(5px,-1px) skewX(-2deg); }
-  60%  { transform: translateY(14%) scale(1.2) translate(-3px,2px) skewX(2deg); }
-  72%  { transform: translateY(14%) scale(1.2) translate(4px,-3px) skewX(-1deg); }
-  84%  { transform: translateY(14%) scale(1.2) translate(-2px,1px) skewX(1deg); }
-  100% { transform: translateY(14%) scale(1.2) translate(0,0) skewX(0deg);       filter: blur(2px) saturate(1.15) hue-rotate(0deg); }
+  0%   { transform: translateY(20%) scale(1.44) translate(0,0) skewX(0deg);       filter: blur(2px) saturate(1.15) hue-rotate(0deg); }
+  12%  { transform: translateY(20%) scale(1.44) translate(-7px,3px) skewX(2.4deg); filter: blur(1px) saturate(1.5) hue-rotate(18deg); }
+  24%  { transform: translateY(20%) scale(1.44) translate(6px,-2px) skewX(-3deg); }
+  36%  { transform: translateY(20%) scale(1.44) translate(-4px,4px) skewX(1.5deg); filter: blur(2.4px) saturate(.75) hue-rotate(-14deg); }
+  48%  { transform: translateY(20%) scale(1.44) translate(5px,-1px) skewX(-2deg); }
+  60%  { transform: translateY(20%) scale(1.44) translate(-3px,2px) skewX(2deg); }
+  72%  { transform: translateY(20%) scale(1.44) translate(4px,-3px) skewX(-1deg); }
+  84%  { transform: translateY(20%) scale(1.44) translate(-2px,1px) skewX(1deg); }
+  100% { transform: translateY(20%) scale(1.44) translate(0,0) skewX(0deg);       filter: blur(2px) saturate(1.15) hue-rotate(0deg); }
 }
-.bw-wf-bg img.glitching { animation: wfBreath 9s ease-in-out infinite, wfGlitch .55s steps(3,end) 1; }
+.bw-wf-bg img.glitching { animation: wfBreath 10.8s ease-in-out infinite, wfGlitch .55s steps(3,end) 1; }
 
 /* ─── 个人资料卡 ─── */
 .bw-profile-card {
