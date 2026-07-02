@@ -77,10 +77,11 @@ input, button, select { font-family: var(--f-main); }
 }
 
 /* ─── Header ─── */
+:root { --bw-tab-skew: 18px; }
 .bw-header {
   position: sticky; top: 0; z-index: 100;
-  display: flex; align-items: stretch;
   height: 62px;
+  opacity: 1;
   /* 暗金属渐变：顶部暖金调 → 底部冷深 */
   background: linear-gradient(180deg,
     rgba(28,22,10,.97) 0%,
@@ -126,168 +127,231 @@ input, button, select { font-family: var(--f-main); }
   pointer-events: none;
 }
 
-/* ─── LOGO / BRAND ─── */
-.bw-brand {
-  display: flex; align-items: center; gap: .65rem;
-  padding: 0 1.6rem 0 1.4rem;
-  flex-shrink: 0; position: relative; z-index: 1;
-}
-/* 右侧斜切分隔线 — 与 .bw-nav-slash 完全一致 */
-.bw-brand::after {
-  content: '';
-  position: absolute; right: 0; top: 12%; bottom: 12%; width: 2px;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    rgba(185,142,52,.4) 20%,
-    rgba(232,200,106,.85) 50%,
-    rgba(185,142,52,.4) 80%,
-    transparent 100%);
-  box-shadow: 0 0 7px rgba(212,168,74,.45);
-  transform: skewX(-16deg);
-}
-.bw-brand-logo-img {
-  width: 38px; height: 38px; object-fit: contain; flex-shrink: 0;
-  filter: drop-shadow(0 0 8px rgba(212,168,74,.6)) drop-shadow(0 0 20px rgba(212,168,74,.25));
-}
-.bw-brand-text { display: flex; flex-direction: column; gap: 1px; }
-.bw-brand-cn {
-  font-family: var(--f-main); font-weight: 900; font-size: 1.05rem;
-  letter-spacing: .09em; line-height: 1.15;
-  color: var(--c-gold-bright);
-  text-shadow: 0 0 22px rgba(212,168,74,.55), 0 0 44px rgba(212,168,74,.2);
-}
-.bw-brand-sub {
-  font-family: var(--f-main); font-weight: 700; font-size: .58rem;
-  letter-spacing: .26em; line-height: 1;
-  color: rgba(180,205,235,.38);
-  padding-left: .06em;
-}
-.bw-header-right {
-  display: flex; align-items: center;
-  padding: 0 1.4rem; flex-shrink: 0; position: relative; z-index: 1;
-}
-/* 左侧斜切分隔线 — 与 .bw-nav-slash 完全一致 */
-.bw-header-right::before {
-  content: '';
-  position: absolute; left: 0; top: 12%; bottom: 12%; width: 2px;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    rgba(185,142,52,.4) 20%,
-    rgba(232,200,106,.85) 50%,
-    rgba(185,142,52,.4) 80%,
-    transparent 100%);
-  box-shadow: 0 0 7px rgba(212,168,74,.45);
-  transform: skewX(-16deg);
-}
-
-/* ─── 顶部导航 ─── */
-.bw-nav {
+/* ─── 顶栏行：logo + 5 导航 + 登出 = 7 等分区块 ─── */
+.bw-header-row {
   display: flex; align-items: stretch;
-  flex: 1; height: 100%;
+  height: 100%; width: 100%;
   position: relative; z-index: 1;
 }
 
-.bw-nav-link {
-  position: relative;
+/* 每个等分区块（含 logo 区）共用尺寸规则 */
+.bw-htab {
+  flex: 1 1 0; min-width: 0;
   display: flex; align-items: center; justify-content: center;
-  flex: 1; padding: 0 1.3rem;
-  color: rgba(195,218,248,.6);
-  font-size: 1rem; font-weight: 900;
-  letter-spacing: .13em; text-transform: uppercase;
-  text-decoration: none; white-space: nowrap;
-  /* clip-path 让 hover 填充和底部光线都变成平行四边形 */
-  clip-path: polygon(14px 0%, 100% 0%, calc(100% - 14px) 100%, 0% 100%);
-  overflow: visible;
-  transition: color .22s ease;
+  position: relative;
 }
 
-/* 悬停填充 — 被 clip-path 裁成平行四边形 */
-.bw-nav-link::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg,
-    rgba(212,168,74,.0)  0%,
-    rgba(212,168,74,.08) 50%,
-    rgba(212,168,74,.18) 100%);
+/* ─── LOGO / BRAND ─── */
+.bw-brand { flex: 1.25 1 0; gap: .55rem; padding: 0 .5rem; }
+.bw-brand-logo-img {
+  width: 34px; height: 34px; object-fit: contain; flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(212,168,74,.6)) drop-shadow(0 0 20px rgba(212,168,74,.25));
+}
+.bw-brand-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bw-brand-cn {
+  font-family: var(--f-main); font-weight: 900; font-size: .92rem;
+  letter-spacing: .04em; line-height: 1.15;
+  color: var(--c-gold-bright);
+  text-shadow: 0 0 22px rgba(212,168,74,.55), 0 0 44px rgba(212,168,74,.2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bw-brand-sub {
+  font-family: var(--f-main); font-weight: 700; font-size: .56rem;
+  letter-spacing: .24em; line-height: 1;
+  color: rgba(180,205,235,.38);
+  padding-left: .06em;
+}
+
+/* ─── 导航 / 登出 按钮（完全统一样式） ─── */
+.bw-nav-link {
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  background: none; border: none; padding: 0 .5rem;
+  font-family: var(--f-main);
+  color: var(--c-gold-mid); /* logo 金色亮度的 90% */
+  font-size: 1.15rem; font-weight: 900;
+  letter-spacing: .1em; text-transform: uppercase;
+  transition: color .22s ease, text-shadow .22s ease;
+}
+.bw-nav-link:hover { color: #f7dfa0; text-shadow: 0 0 22px rgba(247,223,160,.85); }
+
+/* 平行四边形填充层：clip-path 与斜线共用相同角度，保证完全贴合 */
+.bw-tab-fill {
+  position: absolute; inset: 0; z-index: 0;
+  clip-path: polygon(var(--bw-tab-skew) 0, 100% 0, calc(100% - var(--bw-tab-skew)) 100%, 0 100%);
+  background: linear-gradient(180deg, rgba(212,168,74,.24) 0%, rgba(212,168,74,.11) 100%);
+  box-shadow: inset 0 0 26px rgba(255,215,120,.2);
   opacity: 0;
   transition: opacity .22s ease;
   pointer-events: none;
+  overflow: hidden;
 }
+.bw-nav-link:hover .bw-tab-fill { opacity: 1; }
 
-/* 悬停时对角扫光 — 同样被 clip-path 裁剪为平行四边形 */
-.bw-nav-link::after {
+/* 悬停对角扫光 — 由 .bw-tab-fill 的 clip-path 天然裁剪，永不越界 */
+.bw-tab-fill::before {
   content: '';
   position: absolute; top: -120%; left: -55%; width: 32%; height: 340%;
   background: linear-gradient(108deg,
-    transparent 30%, rgba(255,215,100,.15) 50%, transparent 70%);
+    transparent 30%, rgba(255,230,150,.55) 50%, transparent 70%);
   opacity: 0; pointer-events: none;
 }
-.bw-nav-link:hover::after {
-  animation: navTabSweep .48s ease forwards;
+.bw-nav-link:hover .bw-tab-fill::before {
+  animation: navTabSweep .5s ease forwards;
 }
 @keyframes navTabSweep {
   from { transform: translateX(-5%);   opacity: 1; }
   to   { transform: translateX(420%);  opacity: 1; }
 }
 
-/* 底部辉光线 — 同样在 clip-path 内，斜切形状 */
+/* 底部辉光线 */
 .bw-nav-shine {
   position: absolute; bottom: 0;
-  left: 50%; right: 50%; height: 2px;
-  background: linear-gradient(90deg, transparent, #f0d878, transparent);
-  box-shadow: 0 0 10px 2px rgba(240,216,120,.6);
-  opacity: 0; z-index: 2;
+  left: 50%; right: 50%; height: 2px; z-index: 2;
+  background: linear-gradient(90deg, transparent, #f7dfa0, transparent);
+  box-shadow: 0 0 10px 2px rgba(247,223,160,.6);
+  opacity: 0;
   transition: opacity .24s ease,
     left .3s cubic-bezier(.22,.68,0,1.2),
     right .3s cubic-bezier(.22,.68,0,1.2);
   pointer-events: none;
 }
-.bw-nav-label { position: relative; z-index: 1; }
-
-.bw-nav-link:hover { color: #f0d878; text-shadow: 0 0 20px rgba(240,216,120,.75); }
-.bw-nav-link:hover::before { opacity: 1; }
 .bw-nav-link:hover .bw-nav-shine { opacity: 1; left: 8%; right: 8%; }
 
-/* 斜切分隔线 — 独立 span，不受 clip-path 影响 */
+.bw-nav-label { position: relative; z-index: 1; }
+
+/* 斜切分隔线：角度、粗细、光感与 .bw-tab-fill 一致 */
 .bw-nav-slash {
   flex-shrink: 0; align-self: stretch;
   width: 2px;
   background: linear-gradient(180deg,
     transparent 0%,
     rgba(185,142,52,.4) 20%,
-    rgba(232,200,106,.85) 50%,
+    rgba(232,200,106,.9) 50%,
     rgba(185,142,52,.4) 80%,
     transparent 100%);
-  box-shadow: 0 0 7px rgba(212,168,74,.45);
+  box-shadow: 0 0 8px rgba(212,168,74,.5);
   transform: skewX(-16deg);
   pointer-events: none;
 }
 
-/* ─── 登出按钮 ─── */
-.bw-logout-btn {
-  display: inline-flex; align-items: center; gap: .45rem;
-  background: linear-gradient(135deg, rgba(212,168,74,.1) 0%, rgba(140,102,30,.06) 100%);
-  border: 1px solid rgba(185,142,52,.42);
-  color: rgba(212,168,74,.7);
-  font-family: var(--f-main); font-size: .78rem; font-weight: 700;
-  letter-spacing: .08em;
-  padding: .38rem 1.2rem .38rem 1rem;
-  cursor: pointer;
-  /* 右上角斜切：用 clip-path；悬停 glow 用 filter:drop-shadow（兼容 clip-path） */
-  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 0 100%);
-  transition: background .18s ease, border-color .18s ease, color .18s ease, filter .18s ease;
-}
-.bw-logout-btn:hover {
-  background: linear-gradient(135deg, rgba(212,168,74,.18) 0%, rgba(140,102,30,.1) 100%);
-  border-color: rgba(212,168,74,.72);
-  color: #e8c86a;
-  filter: drop-shadow(0 0 10px rgba(212,168,74,.4));
-}
-.bw-logout-icon { flex-shrink: 0; }
-
 /* ─── 页面布局 ─── */
-.page-wrap { position: relative; z-index: 2; }
+.page-wrap { position: relative; z-index: 2; opacity: .95; }
 .bw-wrap { max-width: 1180px; margin: 0 auto; padding: 2rem 1.4rem 4rem; }
+
+/* ─── 登出二次确认弹窗 ─── */
+.bw-confirm-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4,5,12,.72);
+  backdrop-filter: blur(4px);
+  opacity: 0; visibility: hidden;
+  transition: opacity .22s ease, visibility 0s linear .22s;
+}
+.bw-confirm-overlay.show {
+  opacity: 1; visibility: visible;
+  transition: opacity .22s ease, visibility 0s linear 0s;
+}
+.bw-confirm-box {
+  position: relative;
+  width: 360px; max-width: calc(100vw - 2.4rem);
+  background: linear-gradient(160deg, rgba(16,20,42,.97) 0%, rgba(8,10,22,.98) 100%);
+  border: 1px solid rgba(185,142,52,.32);
+  padding: 2.1rem 1.9rem 1.7rem;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(0,0,0,.7), 0 0 0 1px rgba(212,168,74,.05);
+  transform: scale(.9) translateY(10px); opacity: 0;
+  transition: transform .28s cubic-bezier(.22,.68,0,1.2), opacity .22s ease;
+}
+.bw-confirm-overlay.show .bw-confirm-box { transform: scale(1) translateY(0); opacity: 1; }
+/* 顶部扫描光条 */
+.bw-confirm-box::before {
+  content: '';
+  position: absolute; top: 0; left: 12%; right: 12%; height: 2px;
+  background: linear-gradient(90deg, transparent, #f0d878, transparent);
+  box-shadow: 0 0 14px rgba(240,216,120,.6);
+}
+.bw-confirm-icon {
+  width: 54px; height: 54px; margin: 0 auto .9rem;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(232,146,74,.16) 0%, transparent 72%);
+  border: 1px solid rgba(232,146,74,.4);
+  color: var(--c-warn);
+  box-shadow: 0 0 22px rgba(232,146,74,.22);
+  animation: confirmIconPulse 2.2s ease-in-out infinite;
+}
+@keyframes confirmIconPulse {
+  0%,100% { box-shadow: 0 0 16px rgba(232,146,74,.18); }
+  50%      { box-shadow: 0 0 30px rgba(232,146,74,.4); }
+}
+.bw-confirm-title {
+  font-family: var(--f-main); font-weight: 800; font-size: 1.08rem;
+  color: var(--c-white); letter-spacing: .04em;
+}
+.bw-confirm-sub {
+  margin-top: .5rem; color: var(--c-text2); font-size: .82rem; line-height: 1.6;
+}
+.bw-confirm-actions {
+  margin-top: 1.5rem; display: flex; gap: .8rem;
+}
+.bw-confirm-btn {
+  flex: 1; padding: .62rem 0;
+  font-family: var(--f-main); font-size: .88rem; font-weight: 700; letter-spacing: .04em;
+  cursor: pointer; transition: all .18s ease;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
+.bw-confirm-cancel {
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.14);
+  color: var(--c-text2);
+}
+.bw-confirm-cancel:hover { border-color: rgba(255,255,255,.3); color: var(--c-white); }
+.bw-confirm-ok {
+  background: linear-gradient(135deg, rgba(232,146,74,.22), rgba(203,74,74,.12));
+  border: 1px solid rgba(232,146,74,.6);
+  color: #f0a866;
+}
+.bw-confirm-ok:hover {
+  box-shadow: 0 0 18px rgba(232,146,74,.35);
+  color: #ffbf82;
+}
+
+/* 弹窗四角括号（复用登录页 .bw-c 样式，此处独立定义防止未加载登录页样式时缺失） */
+.bw-c { position: absolute; width: 14px; height: 14px; pointer-events: none; }
+.bw-c-tl { top: 0; left: 0; border-top: 2px solid rgba(212,168,74,.5); border-left: 2px solid rgba(212,168,74,.5); }
+.bw-c-tr { top: 0; right: 0; border-top: 2px solid rgba(212,168,74,.5); border-right: 2px solid rgba(212,168,74,.5); }
+.bw-c-bl { bottom: 0; left: 0; border-bottom: 2px solid rgba(212,168,74,.5); border-left: 2px solid rgba(212,168,74,.5); }
+.bw-c-br { bottom: 0; right: 0; border-bottom: 2px solid rgba(212,168,74,.5); border-right: 2px solid rgba(212,168,74,.5); }
+
+/* ─── 巨型 Warframe 徽标呼吸背景 ─── */
+.bw-wf-bg {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.bw-wf-bg img {
+  width: 80vw; height: 80vh;
+  object-fit: contain;
+  filter: blur(2px) saturate(1.15);
+  opacity: 0;
+  animation: wfBreath 9s ease-in-out infinite;
+  will-change: opacity, transform, filter;
+}
+@keyframes wfBreath {
+  0%, 100% { opacity: 0; }
+  50%       { opacity: .35; }
+}
+@keyframes wfGlitch {
+  0%   { transform: translate(0,0) skewX(0deg);       filter: blur(2px) saturate(1.15) hue-rotate(0deg); }
+  12%  { transform: translate(-7px,3px) skewX(2.4deg); filter: blur(1px) saturate(1.5) hue-rotate(18deg); }
+  24%  { transform: translate(6px,-2px) skewX(-3deg); }
+  36%  { transform: translate(-4px,4px) skewX(1.5deg); filter: blur(2.4px) saturate(.75) hue-rotate(-14deg); }
+  48%  { transform: translate(5px,-1px) skewX(-2deg); }
+  60%  { transform: translate(-3px,2px) skewX(2deg); }
+  72%  { transform: translate(4px,-3px) skewX(-1deg); }
+  84%  { transform: translate(-2px,1px) skewX(1deg); }
+  100% { transform: translate(0,0) skewX(0deg);       filter: blur(2px) saturate(1.15) hue-rotate(0deg); }
+}
+.bw-wf-bg img.glitching { animation: wfBreath 9s ease-in-out infinite, wfGlitch .55s steps(3,end) 1; }
 
 /* ─── 个人资料卡 ─── */
 .bw-profile-card {
@@ -1186,6 +1250,7 @@ input[type=text].bw-drawer-input { padding-right: .82rem; }
 .bw-footer {
   position: relative; z-index: 2;
   margin-top: 3rem;
+  opacity: .95;
 }
 .bw-footer-sep {
   height: 1px;

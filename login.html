@@ -15,6 +15,7 @@
     .bw-login-page {
       position: fixed; inset: 0; z-index: 2;
       display: flex; align-items: center; justify-content: center;
+      opacity: .95;
     }
 
     /* 中心放射状大光晕 */
@@ -233,14 +234,18 @@
   <div class="bw-login-corner-glow br"></div>
 
   <header class="bw-header">
-    <div class="bw-brand">
-      <img src="picture/WS-logo-2.png" class="bw-brand-logo-img" alt="WS">
-      <div class="bw-brand-text">
-        <span class="bw-brand-cn">CSC·Alliance</span>
-        <span class="bw-brand-sub">BOSS TOOL</span>
+    <div class="bw-header-row">
+      <div class="bw-htab bw-brand" style="flex:0 0 auto; padding:0 1.6rem;">
+        <img src="picture/WS-logo-2.png" class="bw-brand-logo-img" alt="WS">
+        <div class="bw-brand-text">
+          <span class="bw-brand-cn">CSC·Alliance</span>
+          <span class="bw-brand-sub">BOSS TOOL</span>
+        </div>
       </div>
     </div>
   </header>
+
+  <div class="bw-wf-bg" aria-hidden="true"><img src="picture/warframe-logo-blue-black.svg" alt=""></div>
 
   <div class="bw-login-page">
     <form class="bw-login-card" id="bw-login-form" autocomplete="on">
@@ -280,5 +285,17 @@
   </div>
 
   <script src="js/login.js"></script>
+  <script>
+    (function () {
+      var img = document.querySelector('.bw-wf-bg img');
+      if (!img) return;
+      function trigger() {
+        img.classList.add('glitching');
+        setTimeout(function () { img.classList.remove('glitching'); }, 560);
+        setTimeout(trigger, 6000 + Math.random() * 9000);
+      }
+      setTimeout(trigger, 3500 + Math.random() * 4500);
+    })();
+  </script>
 </body>
 </html>

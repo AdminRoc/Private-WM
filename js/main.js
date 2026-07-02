@@ -71,14 +71,50 @@ async function apiFetch(path, opts) {
   const ctx = canvas.getContext('2d');
   let W, H, stars = [];
   function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  function activateMeteor(m) {
+    const angle = Math.PI*0.2 + Math.random()*0.18;
+    const speed = 7 + Math.random()*6;
+    m.active = true;
+    m.x = Math.random()*W*0.75;
+    m.y = -30 - Math.random()*90;
+    m.vx = Math.cos(angle)*speed;
+    m.vy = Math.sin(angle)*speed;
+    m.len = 70 + Math.random()*70;
+    m.life = 0;
+    m.maxLife = 85 + Math.random()*25;
+  }
   function gen() {
     stars = Array.from({ length: 120 }, function() {
-      return { x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.2+.2, a: Math.random(), da: (Math.random()*.003+.001)*(Math.random()<.5?1:-1) };
+      if (Math.random() < 0.06) {
+        return { type: 'meteor', active: false, delay: Math.floor(Math.random()*500) };
+      }
+      return { type: 'star', x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.2+.2, a: Math.random(), da: (Math.random()*.003+.001)*(Math.random()<.5?1:-1) };
     });
   }
   function draw() {
     ctx.clearRect(0, 0, W, H);
     stars.forEach(function(s) {
+      if (s.type === 'meteor') {
+        if (!s.active) {
+          if (s.delay > 0) { s.delay--; return; }
+          activateMeteor(s);
+        }
+        s.x += s.vx; s.y += s.vy; s.life++;
+        const alpha = Math.max(0, 1 - s.life/s.maxLife);
+        const segLen = s.len / Math.hypot(s.vx, s.vy);
+        const tailX = s.x - s.vx*segLen, tailY = s.y - s.vy*segLen;
+        const grad = ctx.createLinearGradient(s.x, s.y, tailX, tailY);
+        grad.addColorStop(0, 'rgba(224,238,255,' + (alpha*.9) + ')');
+        grad.addColorStop(1, 'rgba(224,238,255,0)');
+        ctx.strokeStyle = grad; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(tailX, tailY); ctx.stroke();
+        ctx.beginPath(); ctx.arc(s.x, s.y, 1.3, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')'; ctx.fill();
+        if (s.life > s.maxLife || s.x > W+60 || s.y > H+60) {
+          s.active = false; s.delay = Math.floor(Math.random()*550 + 120);
+        }
+        return;
+      }
       s.a += s.da;
       if (s.a > 1 || s.a < 0) s.da *= -1;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
@@ -88,6 +124,20 @@ async function apiFetch(path, opts) {
   }
   window.addEventListener('resize', function() { resize(); gen(); });
   resize(); gen(); draw();
+})();
+
+/* ──────────────────────────────────────────────────────────
+   巨型 Warframe 徽标呼吸背景 — 随机故障效果
+─────────────────────────────────────────────────────────── */
+(function initWfGlitch() {
+  const img = document.querySelector('.bw-wf-bg img');
+  if (!img) return;
+  function trigger() {
+    img.classList.add('glitching');
+    setTimeout(function() { img.classList.remove('glitching'); }, 560);
+    setTimeout(trigger, 6000 + Math.random()*9000);
+  }
+  setTimeout(trigger, 3500 + Math.random()*4500);
 })();
 
 /* ──────────────────────────────────────────────────────────
@@ -960,8 +1010,18 @@ async function visAllOrders(visible) {
    事件绑定
 ─────────────────────────────────────────────────────────── */
 function bindEvents() {
-  /* 退出 */
-  document.getElementById('bw-logout-btn')?.addEventListener('click', async function() {
+  /* 退出（二次确认） */
+  const logoutOverlay = document.getElementById('bw-logout-confirm');
+  document.getElementById('bw-logout-btn')?.addEventListener('click', function() {
+    logoutOverlay?.classList.add('show');
+  });
+  document.getElementById('bw-confirm-cancel')?.addEventListener('click', function() {
+    logoutOverlay?.classList.remove('show');
+  });
+  logoutOverlay?.addEventListener('click', function(e) {
+    if (e.target === logoutOverlay) logoutOverlay.classList.remove('show');
+  });
+  document.getElementById('bw-confirm-ok')?.addEventListener('click', async function() {
     await apiFetch('/signout', { method: 'POST' }).catch(function(){});
     location.reload();
   });
