@@ -18,9 +18,6 @@ const WM_JWT_TTL      = 60 * 60 * 12;
 const WM_ITEMS_KV_KEY    = 'wm_items_cache';
 const WM_ITEMS_TTL       = 60 * 60;
 const WM_PRICE_TTL       = 60 * 5;
-const PRICE_BATCH_SIZE   = 2000;         // 每次 Cron 处理的物品数；3834条÷2000≈2轮≈2小时一完整周期
-const PRICE_OFFSET_KEY   = 'price_compute_offset';
-const PRICE_KV_TTL       = 60 * 60 * 25; // 25h：覆盖至少一个完整轮次
 
 /* ══ 通用工具 ═══════════════════════════════════════════════ */
 function jsonResponse(obj, status) {
@@ -443,7 +440,7 @@ function calcAvg(allOrders) {
 async function handleWmPrice(request, env, slug) {
   if (!await getSession(request, env)) return jsonResponse({ error: '请先登录' }, 401);
 
-  // 1. KV 缓存（Cron 预计算写入，5min TTL）
+  // 1. KV 缓存（仅由本函数按需写入，5min TTL；不再有批量预计算）
   const cacheKey = 'avg_price_v2_' + slug;
   const cached = await env.BW_SESSIONS.get(cacheKey);
   if (cached) { try { return jsonResponse({ data: JSON.parse(cached) }); } catch {} }
@@ -597,49 +594,6 @@ async function handleSetStatus(request, env) {
   } catch(e) { return jsonResponse({ error: e.message }, 502); }
 }
 
-/* ══ 定时任务：分批预计算全量 WM 物品均价 ══════════════════════
-   每小时 Cron 触发一次，每次处理 PRICE_BATCH_SIZE 个物品。
-   进度偏移量存 KV（PRICE_OFFSET_KEY），下次从断点继续。
-   WM 全量约 2500 个物品，每批 600 个 ≈ 5 分钟，
-   约 4 小时完成一轮，远低于 Cloudflare 30 分钟上限。
-═══════════════════════════════════════════════════════════════ */
-async function computePricesBatch(env) {
-  // 读全量物品列表（由 refreshItemsCache 每小时维护）
-  const itemsRaw = await env.BW_SESSIONS.get(WM_ITEMS_KV_KEY);
-  if (!itemsRaw) return;
-  let items;
-  try { items = JSON.parse(itemsRaw); } catch { return; }
-
-  const slugs = items.map(function(i) { return i.url_name || i.slug; }).filter(Boolean);
-  const total = slugs.length;
-  if (total === 0) return;
-
-  // 读进度偏移量
-  let offset = 0;
-  const offsetRaw = await env.BW_SESSIONS.get(PRICE_OFFSET_KEY);
-  if (offsetRaw) { offset = parseInt(offsetRaw, 10) || 0; }
-  if (offset >= total) offset = 0;  // 上一轮已跑完，从头开始
-
-  const batch = slugs.slice(offset, offset + PRICE_BATCH_SIZE);
-
-  for (var i = 0; i < batch.length; i++) {
-    const slug = batch[i];
-    try {
-      const resp = await wmPublicFetch('/v2/orders/item/' + slug, env);
-      if (!resp.ok) { await new Promise(function(r) { setTimeout(r, 800); }); continue; }
-      const json = await resp.json();
-      const allOrders = json.data || [];
-      const result = calcAvg(allOrders);
-      await env.BW_SESSIONS.put('avg_price_v2_' + slug, JSON.stringify(result), { expirationTtl: PRICE_KV_TTL });
-    } catch {}
-    await new Promise(function(r) { setTimeout(r, 200 + Math.random() * 200); });
-  }
-
-  // 保存新偏移量（本批结束位置）
-  const newOffset = (offset + batch.length >= total) ? 0 : offset + batch.length;
-  await env.BW_SESSIONS.put(PRICE_OFFSET_KEY, String(newOffset), { expirationTtl: 60 * 60 * 48 });
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -684,9 +638,10 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每小时：刷新物品总表（须先于均价批次，确保 slug 列表是最新的）
+    // 每小时：刷新物品总表。均价改由 GitHub Actions 离线计算写入
+    // data/avg_prices_full.json（走 env.ASSETS 静态读取，零 KV 消耗），
+    // 不再由 Worker 自身批量预计算写 KV —— 原实现每小时写 2000 条 KV，
+    // 一天约 48000 次写入，远超 KV 每日限额，是告警的根因。
     ctx.waitUntil(refreshItemsCache(env));
-    // 每小时：处理下一批均价（基于 KV offset 断点续跑，约 4 小时一轮）
-    ctx.waitUntil(computePricesBatch(env));
   },
 };

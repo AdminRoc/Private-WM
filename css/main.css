@@ -171,16 +171,52 @@ input, button, select { font-family: var(--f-main); }
   letter-spacing: .1em; text-transform: uppercase;
   transition: color .22s ease, text-shadow .22s ease;
 }
-.bw-nav-link:hover { color: #f7dfa0; text-shadow: 0 0 22px rgba(247,223,160,.85); }
+.bw-nav-link:hover {
+  color: #fff3d6;
+  text-shadow: 0 0 22px rgba(247,223,160,.85);
+}
 
-/* 平行四边形填充层：clip-path 与斜线共用相同角度，保证完全贴合 */
+/* 目标锁定边角括号 — 悬停时从两个对角淡入，呼应登录卡/确认弹窗的 .bw-c 视觉语言 */
+.bw-nav-link::before, .bw-nav-link::after {
+  content: ''; position: absolute; z-index: 3;
+  width: 8px; height: 8px; opacity: 0;
+  transition: opacity .2s ease, transform .2s ease;
+  pointer-events: none;
+}
+.bw-nav-link::before {
+  top: 7px; left: 13px; transform: translate(-3px,-3px);
+  border-top: 1.5px solid #f7dfa0; border-left: 1.5px solid #f7dfa0;
+}
+.bw-nav-link::after {
+  bottom: 7px; right: 13px; transform: translate(3px,3px);
+  border-bottom: 1.5px solid #f7dfa0; border-right: 1.5px solid #f7dfa0;
+}
+.bw-nav-link:hover::before, .bw-nav-link:hover::after {
+  opacity: .9; transform: translate(0,0);
+}
+
+/* 文字信号锁定闪烁 — 悬停瞬间一次性色差闪烁，随后收束为稳定辉光（非循环，只在进入时播放一次） */
+.bw-nav-label {
+  position: relative; z-index: 1;
+  display: inline-block;
+}
+.bw-nav-link:hover .bw-nav-label {
+  animation: navLabelLock .4s steps(1,end) 1;
+}
+@keyframes navLabelLock {
+  0%   { text-shadow: 2px 0 rgba(255,100,130,.85), -2px 0 rgba(100,220,255,.85); }
+  15%  { text-shadow: -2px 0 rgba(255,100,130,.7), 2px 0 rgba(100,220,255,.7); }
+  30%  { text-shadow: 1px 0 rgba(255,100,130,.55), -1px 0 rgba(100,220,255,.55); }
+  45%  { text-shadow: -1px 0 rgba(255,100,130,.4), 1px 0 rgba(100,220,255,.4); }
+  100% { text-shadow: 0 0 22px rgba(247,223,160,.85); }
+}
+
+/* 平行四边形填充层：与 .bw-nav-slash 共享同一 skewX 变换公式，逐像素贴合、无角度误差 */
 .bw-tab-fill {
   position: absolute; inset: 0; z-index: 0;
-  /* 用 transform:skewX 而非 clip-path：与 .bw-nav-slash 共享同一变换公式，
-     只要二者高度相同，几何上必然逐像素贴合，不存在角度误差 */
-  transform: skewX(-16deg);
-  background: linear-gradient(180deg, rgba(255,214,120,.34) 0%, rgba(212,168,74,.22) 100%);
-  box-shadow: inset 0 0 26px rgba(255,215,120,.25);
+  transform: skewX(-16deg) translate3d(0,0,0);
+  background: linear-gradient(180deg, rgba(255,214,120,.3) 0%, rgba(212,168,74,.16) 100%);
+  box-shadow: inset 0 0 26px rgba(255,215,120,.22);
   opacity: 0;
   transition: opacity .22s ease;
   pointer-events: none;
@@ -188,57 +224,68 @@ input, button, select { font-family: var(--f-main); }
 }
 .bw-nav-link:hover .bw-tab-fill {
   opacity: 1;
-  animation: navFillPulse 2.4s ease-in-out infinite;
+  animation: navFillPulse 2.6s ease-in-out infinite;
 }
 @keyframes navFillPulse {
-  0%, 100% { filter: brightness(1)   saturate(1); }
-  50%       { filter: brightness(1.3) saturate(1.15); }
+  0%, 100% { filter: brightness(1)    saturate(1); }
+  50%       { filter: brightness(1.28) saturate(1.15); }
 }
 
-/* 悬停对角扫光 — 位于 .bw-tab-fill 的（已 skew 的）局部坐标系内，被 overflow:hidden 天然裁剪
-   常驻挂载 + animation-play-state 控制启停，避免 hover 瞬间才创建动画导致的掉帧/卡顿；
-   循环运行、GPU 合成层（translate3d + will-change），高帧率持续扫光而非一次性停止 */
-.bw-tab-fill::before {
+/* 双层「能量刃」扫光：明亮核心 + 稍宽的柔光尾迹，用负 animation-delay 制造前后跟随的彗尾感，
+   循环运行；ease 曲线而非线性匀速，避免机械感；GPU 合成层（translate3d + will-change） */
+.bw-tab-fill::before,
+.bw-tab-fill::after {
   content: '';
-  position: absolute; top: -130%; left: -60%; width: 30%; height: 360%;
-  background: linear-gradient(108deg,
-    transparent 20%, rgba(255,236,175,.85) 50%, transparent 80%);
+  position: absolute; top: -130%; left: -60%; height: 360%;
   pointer-events: none;
-  transform: translate3d(0,0,0);
+  transform: translate3d(-5%,0,0);
   will-change: transform, opacity;
-  animation: navTabSweep 1.7s linear infinite;
+  animation: navBladeSweep 2.1s cubic-bezier(.37,0,.63,1) infinite;
   animation-play-state: paused;
 }
-.bw-nav-link:hover .bw-tab-fill::before { animation-play-state: running; }
-@keyframes navTabSweep {
-  0%   { transform: translate3d(-5%,0,0);   opacity: 0; }
+.bw-tab-fill::before {
+  width: 10%;
+  background: linear-gradient(108deg,
+    transparent 10%, rgba(255,246,220,.05) 40%, #fff7e0 50%, rgba(255,246,220,.05) 60%, transparent 90%);
+  filter: drop-shadow(0 0 6px rgba(255,236,180,.8));
+}
+.bw-tab-fill::after {
+  width: 26%;
+  background: linear-gradient(108deg,
+    transparent 15%, rgba(255,214,120,.4) 50%, transparent 85%);
+  animation-delay: -.22s;
+}
+.bw-nav-link:hover .bw-tab-fill::before,
+.bw-nav-link:hover .bw-tab-fill::after { animation-play-state: running; }
+@keyframes navBladeSweep {
+  0%   { transform: translate3d(-8%,0,0);   opacity: 0; }
   10%  { opacity: 1; }
   50%  { transform: translate3d(230%,0,0);  opacity: 1; }
   90%  { opacity: 1; }
-  100% { transform: translate3d(430%,0,0);  opacity: 0; }
+  100% { transform: translate3d(440%,0,0);  opacity: 0; }
 }
 
-/* 底部辉光线 — 悬停期间同样持续脉动循环，而不是点亮后静止 */
+/* 底部辉光线 — 悬停期间持续脉动循环，中心向两侧展开后维持呼吸 */
 .bw-nav-shine {
   position: absolute; bottom: 0;
   left: 50%; right: 50%; height: 2px; z-index: 2;
-  background: linear-gradient(90deg, transparent, #f7dfa0, transparent);
+  background: linear-gradient(90deg, transparent, #fff3d6, transparent);
   box-shadow: 0 0 10px 2px rgba(247,223,160,.6);
   opacity: 0;
   transform: translate3d(0,0,0);
   will-change: opacity, box-shadow;
   transition: opacity .24s ease,
-    left .3s cubic-bezier(.22,.68,0,1.2),
-    right .3s cubic-bezier(.22,.68,0,1.2);
+    left .32s cubic-bezier(.22,.68,0,1.2),
+    right .32s cubic-bezier(.22,.68,0,1.2);
   pointer-events: none;
 }
 .bw-nav-link:hover .bw-nav-shine {
   opacity: 1; left: 8%; right: 8%;
-  animation: navShinePulse 2.4s ease-in-out infinite;
+  animation: navShinePulse 2.6s ease-in-out infinite;
 }
 @keyframes navShinePulse {
   0%, 100% { box-shadow: 0 0 10px 2px rgba(247,223,160,.6); }
-  50%       { box-shadow: 0 0 18px 4px rgba(247,223,160,.95); }
+  50%       { box-shadow: 0 0 20px 5px rgba(247,223,160,.95); }
 }
 
 .bw-nav-label { position: relative; z-index: 1; }
